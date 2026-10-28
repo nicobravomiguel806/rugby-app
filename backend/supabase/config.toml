@@ -1,0 +1,29 @@
+# Configuración del entorno local de Supabase (supabase start). Los proyectos dev y prod se enlazan con `supabase link`.
+project_id = "rugby-app"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+max_rows = 500
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "rugbyapp://auth-callback"
+enable_signup = true
+minimum_password_length = 10
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[auth.rate_limit]
+sign_in_sign_ups = 30
+token_refresh = 150
+
+[realtime]
+enabled = true
