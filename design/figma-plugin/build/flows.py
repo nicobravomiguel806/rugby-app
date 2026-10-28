@@ -46,7 +46,7 @@ F["C-01"] = [
  S("Bienvenida", [["brand"],["h1","Tu torneo de rugby, en una app"],["p","Equipos, torneos y resultados de tu comunidad."],["btn","Crear cuenta","pri",1],["btn","Ya tengo cuenta","sec"]], "Toca «Crear cuenta»", tab=None),
  S("Registro", [["h1","Crea tu cuenta"],["btn","Continuar con Apple","apple"],["btn","Continuar con Google","sec"],["note","o con tu correo"],["field","Nombre completo","Daniela Ruiz"],["field","Correo","daniela@correo.com"],["field","Contraseña (mín. 10)","••••••••••"],["check","Acepto el Aviso de Privacidad (LFPDPPP)",1],["btn","Crear cuenta","pri",1]], "Envía el formulario", tab=None, back="Bienvenida"),
  S("Verifica tu correo", [["done","Revisa tu correo","Te enviamos un enlace a daniela@correo.com para activar tu cuenta."],["btn","Abrir correo","pri",1],["btn","Reenviar enlace","txt"]], "Abre el enlace → la sesión inicia", tab=None),
- S("Sesión iniciada", [["done","¡Listo, Daniela!","Tu cuenta está activa. Ahora crea tu perfil (C-03)."],["btn","Crear mi perfil","pri"]], None, tab=None),
+ S("Sesión iniciada", [["done","¡Listo, Daniela!","Tu cuenta está activa. Ahora crea tu perfil (C-03)."],["kv",[["Correo","daniela@correo.com"],["Comunidad","Rugby Querétaro"]]],["btn","Crear mi perfil","pri"]], None, tab=None),
 ]
 F["C-02"] = [
  S("Iniciar sesión", [["brand"],["h1","Bienvenida de nuevo"],["field","Correo","daniela@correo.com"],["field","Contraseña","••••••••••"],["btn","Iniciar sesión","pri",1],["btn","¿Olvidaste tu contraseña?","txt"]], "Toca «Iniciar sesión»", tab=None),
@@ -72,7 +72,7 @@ F["F-03"] = [
 # ───────────── Fan ─────────────
 F["F-01"] = [
  S("Torneo", [["h1","Liga Bajío 2027"],["p","XV · 8 equipos"],["btn","Seguir torneo","pri",1],["seg",["Fixture","Tabla","Equipos"],"Equipos"],["row","LB","Lobos","8 jugadores siguen","☆"],["row","TR","Toros","","☆"]], "Toca «Seguir torneo»", tab="Torneos"),
- S("Siguiendo", [["toast","Ahora sigues Liga Bajío 2027"],["h1","Siguiendo"],["seg",["Torneos","Equipos","Jugadores"],"Torneos"],["row","LB","Liga Bajío 2027","XV · En curso","★",1]], "Ve lo que sigues en Inicio", tab="Perfil"),
+ S("Siguiendo", [["toast","Ahora sigues Liga Bajío 2027"],["h1","Siguiendo"],["seg",["Torneos","Equipos","Jugadores"],"Torneos"],["row","LB","Liga Bajío 2027","XV · En curso","★",1],["row","CS","Copa Seven","7s · Inscripciones","★"]], "Ve lo que sigues en Inicio", tab="Perfil"),
  S("Inicio personalizado", home("Ana","Lo que sigues",["Torneos","Partidos","Siguiendo","Tabla"],None,[["section","De lo que sigues"],["card","Lobos vs Toros","EN VIVO · 2T 54'","21 – 14","EN VIVO"]]), None),
 ]
 F["V-06"] = [
@@ -81,7 +81,7 @@ F["V-06"] = [
 ]
 F["F-02"] = [
  S("Ajustes de avisos", [["h1","Notificaciones"],["check","Inicio de partido",1],["check","Ensayos",1],["check","Resultado final",1],["check","Anuncios del torneo",0],["btn","Guardar","pri",1]], "Activa los avisos", tab="Perfil"),
- S("Pantalla bloqueada", [["notif","Rugby App · ahora","¡Ensayo de Lobos! 21 – 14 · 54'"],["notif","Rugby App · hace 1 h","Empezó Lobos vs Toros"]], "Toca la notificación", tab=None, dark=True),
+ S("Pantalla bloqueada", [["h1","16:54"],["notif","Rugby App · ahora","¡Ensayo de Lobos! 21 – 14 · 54'"],["notif","Rugby App · hace 1 h","Empezó Lobos vs Toros"]], "Toca la notificación", tab=None, dark=True),
  S("Marcador en vivo", [["score","LOBOS","21","TOROS","14","54:12","2T"],["event","54'","Ensayo · Lobos","#9 N. Bravo","ok"]], None, tab="Partido"),
 ]
 F["M-01"] = [
@@ -93,12 +93,12 @@ F["M-03"] = [
  S("Estadísticas del jugador", [["avatar","NB","Nicolás Bravo","Medio scrum · Lobos"],["stat",[["3","PJ"],["2","Ensayos"],["10","Puntos"]]],["stat",[["1","Amarillas"],["0","Rojas"],["212'","Minutos"]]],["section","Por partido"],["row","J3","Lobos 28 – 17 Toros","1 ensayo · 80'","5 pts"]], None, tab="Equipos", back="Lobos"),
 ]
 F["M-04"] = [
- S("Torneo", [["h1","Liga Bajío 2027"],["seg",["Tabla","Líderes","Fixture"],"Líderes",1]], "Toca «Líderes»", tab="Torneos"),
+ S("Torneo", [["h1","Liga Bajío 2027"],["seg",["Tabla","Líderes","Fixture"],"Tabla",1],["table",["#","Equipo","PJ","Dif","Pts"],[["1","Lobos","3","+41","14"],["2","Águilas","3","+18","10"],["3","Toros","3","+9","9"]]]], "Toca «Líderes»", tab="Torneos"),
  S("Líderes", [["h1","Líderes"],["seg",["Puntos","Ensayos","Tarjetas"],"Ensayos"],["table",["#","Jugador","Equipo","Ens."],[["1","P. Gil","Lobos","6"],["2","R. Díaz","Toros","5"],["3","N. Bravo","Lobos","4"],["4","L. Soto","Águilas","4"]]],["section","Equipos"],["stat",[["Lobos","Más ensayos"],["Águilas","Mejor defensa"]]]], None, tab="Torneos"),
 ]
 # ───────────── Jugador ─────────────
 F["C-04"] = [
- S("Mi perfil", [["avatar","NB","Nicolás Bravo","Jugador"],["row","JG","Datos de jugador","Incompletos","›",1]], "Toca «Datos de jugador»", tab="Perfil"),
+ S("Mi perfil", [["avatar","NB","Nicolás Bravo","Jugador · Rugby Querétaro"],["chips",["Fan","Jugador"],[0,1]],["row","JG","Datos de jugador","Incompletos","›",1],["row","EQ","Mi equipo","Sin equipo","›"],["row","⚙","Ajustes","","›"]], "Toca «Datos de jugador»", tab="Perfil"),
  S("Datos de jugador", [["h1","Datos de jugador"],["field","Posición","Medio scrum",1],["field","Fecha de nacimiento","04/06/2001"],["field","Altura","1.74 m"],["field","Peso","72 kg"],["btn","Guardar","pri",1]], "Toca «Guardar»", tab="Perfil", back="Perfil"),
  S("Datos guardados", [["toast","Tus datos se guardaron"],["avatar","NB","Nicolás Bravo","Medio scrum · 24 años"],["kv",[["Elegibilidad","Mayor varonil"],["Estado","Completo"]]]], None, tab="Perfil"),
 ]
@@ -112,60 +112,60 @@ F["E-04"] = [
 ]
 # ───────────── Padre / Tutor ─────────────
 F["C-05"] = [
- S("Mi perfil", [["avatar","LH","Laura Hernández","Padre / Tutor"],["row","+","Vincular a mi hijo","Menor de 18 años","›",1]], "Toca «Vincular a mi hijo»", tab="Perfil"),
+ S("Mi perfil", [["avatar","LH","Laura Hernández","Padre / Tutor · Rugby Querétaro"],["section","Menores a mi cargo"],["p","Aún no vinculas a ningún menor."],["row","+","Vincular a mi hijo","Menor de 18 años","›",1]], "Toca «Vincular a mi hijo»", tab="Perfil"),
  S("Buscar a tu hijo", [["h1","Vincular menor"],["field","Nombre del menor","Mateo Hernández"],["field","Fecha de nacimiento","10/02/2011"],["field","Parentesco","Madre"],["check","Autorizo su participación y el tratamiento de sus datos (LFPDPPP)",1],["btn","Enviar solicitud","pri",1]], "Envía la solicitud", tab="Perfil", back="Perfil"),
  S("En validación", [["done","Solicitud enviada","Un administrador de la comunidad validará la tutela."],["badge","PENDIENTE","warn"]], "El administrador aprueba", tab="Perfil"),
  S("Perfil del menor", [["avatar","MH","Mateo Hernández","15 años · Lobos"],["badge","TUTOR VALIDADO","ok"],["kv",[["Elegible","Sí"],["Aptitud médica","Apto"]]],["row","PJ","Próximo partido","Sáb 14 nov · 16:00","›"]], None, tab="Perfil"),
 ]
 # ───────────── Entrenador / Manager ─────────────
 F["E-01"] = [
- S("Equipos", [["h1","Equipos"],["p","Aún no tienes equipo."],["btn","Crear equipo","pri",1]], "Toca «Crear equipo»", tab="Equipos"),
+ S("Equipos", [["h1","Equipos"],["p","Aún no tienes equipo en Rugby Querétaro."],["btn","Crear equipo","pri",1],["section","Equipos de tu comunidad"],["row","TR","Toros","XV · Varonil · 31 miembros","›"],["row","HL","Halcones","XV · Varonil · 26 miembros","›"],["row","AG","Águilas","Sevens · Femenil · 14 miembros","›"]], "Toca «Crear equipo»", tab="Equipos"),
  S("Nuevo equipo", [["h1","Nuevo equipo"],["avatar","+","Escudo","PNG o JPG"],["field","Nombre","Lobos de Querétaro"],["field","Comunidad","Rugby Querétaro"],["chips",["Mayor varonil","Femenil","Juvenil"],[0]],["btn","Crear equipo","pri",1]], "Toca «Crear equipo»", tab="Equipos", back="Equipos"),
  S("Equipo creado", [["done","¡Lobos creado!","Comparte el equipo para que jugadores y staff soliciten unirse (E-02)."],["btn","Compartir enlace","sec"]], None, tab="Equipos"),
 ]
 F["E-03"] = [
- S("Mi equipo", [["h1","Lobos de Querétaro"],["seg",["Plantilla (28)","Solicitudes (3)"],"Solicitudes (3)",1]], "Toca «Solicitudes»", tab="Equipos"),
+ S("Mi equipo", [["h1","Lobos de Querétaro"],["p","XV · Mayor varonil · Rugby Querétaro"],["seg",["Plantilla (28)","Solicitudes (3)"],"Solicitudes (3)",1],["stat",[["28","Miembros"],["23","Elegibles"],["3","Pendientes"]]],["section","Plantilla"],["row","AL","Andrés López","Pilar · #1","›"],["row","NB","Nicolás Bravo","Medio scrum · #9","›"],["row","CR","Carlos Ruiz","Apertura · #10","›"]], "Toca «Solicitudes»", tab="Equipos"),
  S("Solicitudes", [["h1","Solicitudes"],["row","DM","Diego Martínez","Jugador · 24 años","PENDIENTE",1],["row","SR","Sofía Ramírez","Médico","PENDIENTE"],["row","MH","Mateo Hernández","Jugador · 15 años · tutor validado","PENDIENTE"]], "Toca una solicitud", tab="Equipos", back="Equipo"),
  S("Revisar solicitud", [["avatar","DM","Diego Martínez","Jugador · 24 años"],["kv",[["Posición","Ala"],["Datos de jugador","Completos"]]],["btn","Aprobar","pri",1],["btn","Rechazar","sec"]], "Toca «Aprobar»", tab="Equipos", back="Solicitudes"),
- S("Aprobada", [["toast","Diego se unió a Lobos"],["h1","Solicitudes"],["row","SR","Sofía Ramírez","Médico","PENDIENTE"]], None, tab="Equipos"),
+ S("Aprobada", [["toast","Diego se unió a Lobos"],["h1","Solicitudes"],["seg",["Plantilla (29)","Solicitudes (2)"],"Solicitudes (2)"],["row","SR","Sofía Ramírez","Médico","PENDIENTE"],["row","MH","Mateo Hernández","Jugador · 15 años · tutor validado","PENDIENTE"]], None, tab="Equipos"),
 ]
 F["O-04"] = [
- S("Torneos de mi equipo", [["h1","Liga Bajío 2027"],["card","Plantilla para el torneo","Fecha límite: 7 nov","0 de 30 registrados","PENDIENTE",1]], "Toca «Plantilla»", tab="Torneos"),
+ S("Torneos de mi equipo", [["h1","Liga Bajío 2027"],["p","XV · 8 equipos · Inicia sáb 31 oct"],["card","Plantilla para el torneo","Fecha límite: 7 nov","0 de 30 registrados","PENDIENTE",1],["kv",[["Jugadores elegibles","23 de 28"],["Máximo por plantilla","30"],["Primer partido","vs Toros · 14 nov"]]]], "Toca «Plantilla»", tab="Torneos"),
  S("Elegir jugadores", [["h1","Plantilla del torneo"],["search","Buscar en mi equipo"],["check","1 · Andrés López · elegible",1],["check","9 · Nicolás Bravo · elegible",1],["check","12 · Mateo Hernández · falta tutor",0],["btn","Registrar 23 jugadores","pri",1]], "Toca «Registrar»", tab="Torneos", back="Torneo"),
- S("Plantilla registrada", [["done","Plantilla registrada","23 jugadores elegibles. 1 pendiente por autorización del tutor."]], None, tab="Torneos"),
+ S("Plantilla registrada", [["done","Plantilla registrada","23 jugadores elegibles. 1 pendiente por autorización del tutor."],["kv",[["Registrados","23 de 30"],["Pendientes","1 · M. Hernández"],["Siguiente paso","Alineación (P-02)"]]]], None, tab="Torneos"),
 ]
 F["P-02"] = [
- S("Partido", [["card","Lobos vs Toros","Sáb 14 nov · 16:00","Alineación pendiente","PRE",0],["btn","Capturar alineación","pri",1]], "Toca «Capturar alineación»", tab="Partido"),
+ S("Partido", [["h1","Próximo partido"],["card","Lobos vs Toros","Sáb 14 nov · 16:00 · Cancha 1","Liga Bajío · Jornada 3","PRE"],["kv",[["Árbitro","Roberto Díaz"],["Anotador","Elena Cruz"],["Alineación","Pendiente"]]],["btn","Capturar alineación","pri",1]], "Toca «Capturar alineación»", tab="Partido"),
  S("Alineación", [["h1","Alineación"],["stat",[["15/15","Titulares"],["7/8","Suplentes"]]],["row","1","Andrés López","Pilar izquierdo","✓"],["row","9","Nicolás Bravo","Medio scrum","✓"],["row","12","Mateo Hernández","No elegible: falta tutor","!"],["btn","Confirmar alineación","pri",1]], "Toca «Confirmar»", tab="Partido", back="Partido"),
- S("Alineación enviada", [["done","Alineación confirmada","El árbitro la verá en el check-in (P-03)."]], None, tab="Partido"),
+ S("Alineación enviada", [["done","Alineación confirmada","El árbitro la verá en el check-in (P-03)."],["kv",[["Titulares","15"],["Suplentes","7"],["Capitán","#9 N. Bravo"]]]], None, tab="Partido"),
 ]
 F["R-02"] = [
- S("Partido cerrado", [["score","LOBOS","28","TOROS","17","Final","2T"],["btn","Ver reporte","pri",1]], "Toca «Ver reporte»", tab="Partido"),
+ S("Partido cerrado", [["score","LOBOS","28","TOROS","17","Final","2T"],["badge","RESULTADO OFICIAL","ok"],["section","Resumen"],["event","74'","Ensayo · Lobos","#14 P. Gil · +5","ok"],["event","66'","Roja · Toros","#6 T. Vega","red"],["event","52'","Amarilla · Toros","#4 J. Soto","yellow"],["btn","Ver reporte","pri",1]], "Toca «Ver reporte»", tab="Partido"),
  S("Vista previa", [["h1","Reporte del partido"],["pdf"],["btn","Compartir PDF","pri",1]], "Toca «Compartir PDF»", tab="Partido", back="Partido"),
  S("Compartir", [["h1","Reporte del partido"],["sheet","Compartir"],["row","WA","WhatsApp","","›"],["row","@","Correo","","›"],["row","⤓","Guardar en Archivos","","›"]], None, tab="Partido"),
 ]
 # ───────────── Médico ─────────────
 F["C-06"] = [
- S("Mi equipo", [["h1","Lobos · Médico"],["row","MH","Mateo Hernández","Apto · última revisión 2 oct","›",1],["row","NB","Nicolás Bravo","Apto con restricciones","›"]], "Toca un jugador", tab="Equipos"),
+ S("Mi equipo", [["h1","Lobos · Médico"],["stat",[["25","Aptos"],["2","Restricción"],["1","No apto"]]],["search","Buscar jugador"],["row","MH","Mateo Hernández","Apto · última revisión 2 oct","›",1],["row","NB","Nicolás Bravo","Apto con restricciones","›"],["row","TV","Tomás Vega","No apto · regreso 20 nov","›"]], "Toca un jugador", tab="Equipos"),
  S("Ficha médica", [["avatar","MH","Mateo Hernández","15 años · tutor validado"],["badge","DATOS SENSIBLES","warn"],["kv",[["Aptitud","Apto"],["Alergias","Ninguna"]]],["btn","Registrar revisión","pri",1]], "Toca «Registrar revisión»", tab="Equipos", back="Equipo"),
  S("Nueva revisión", [["h1","Nueva revisión"],["chips",["Apto","Con restricciones","No apto"],[2]],["field","Lesión","Esguince de tobillo derecho"],["field","Regreso estimado","2 semanas"],["btn","Guardar","pri",1]], "Toca «Guardar»", tab="Equipos", back="Ficha"),
  S("Registrada", [["toast","Revisión guardada · el entrenador solo ve «No apto»"],["avatar","MH","Mateo Hernández",""],["badge","NO APTO","danger"]], None, tab="Equipos"),
 ]
 F["R-03"] = [
- S("Partido cerrado", [["score","LOBOS","28","TOROS","17","Final","2T"],["btn","Registrar lesión","sec",1]], "Toca «Registrar lesión»", tab="Partido"),
+ S("Partido cerrado", [["score","LOBOS","28","TOROS","17","Final","2T"],["section","Jugadores de Lobos atendidos"],["row","MH","Mateo Hernández","#12 · salió al 38'","!"],["row","AL","Andrés López","#1 · terminó el partido","✓"],["btn","Registrar lesión","sec",1]], "Toca «Registrar lesión»", tab="Partido"),
  S("Lesión en partido", [["h1","Lesión"],["field","Jugador","#12 · M. Hernández"],["field","Minuto","38'"],["field","Descripción","Golpe en hombro"],["chips",["Puede seguir","Salió del partido"],[1]],["btn","Guardar","pri",1]], "Toca «Guardar»", tab="Partido", back="Partido"),
- S("Reporte médico", [["done","Reporte médico guardado","Visible solo para el médico, el jugador y su tutor."]], None, tab="Partido"),
+ S("Reporte médico", [["done","Reporte médico guardado","Visible solo para el médico, el jugador y su tutor."],["kv",[["Jugador","#12 · M. Hernández"],["Lesión","Golpe en hombro · 38'"],["Aptitud","No apto"]]]], None, tab="Partido"),
 ]
 # ───────────── Árbitro / Anotador ─────────────
 F["P-03"] = [
- S("Mis partidos", [["h1","Mis partidos"],["card","Lobos vs Toros","Hoy · 16:00 · Cancha 1","Árbitro central","PRE",1]], "Toca el partido", tab="Partido"),
+ S("Mis partidos", [["h1","Mis partidos"],["section","Hoy"],["card","Lobos vs Toros","Hoy · 16:00 · Cancha 1","Árbitro central","PRE",1],["section","Próximos"],["card","Halcones vs Jaguares","Sáb 21 nov · 18:00 · Cancha 2","Anotador","PROGRAMADO"],["card","Águilas vs Osos","Sáb 28 nov · 16:00 · Cancha 1","Árbitro central","PROGRAMADO"]], "Toca el partido", tab="Partido"),
  S("Check-in", [["h1","Check-in"],["check","Alineación Lobos (23)",1],["check","Alineación Toros (22)",1],["check","Oficiales presentes",1],["check","Cancha en condiciones",1],["btn","Generar reporte pre-partido","pri",1]], "Toca «Generar reporte»", tab="Partido", back="Partidos"),
  S("Listo para iniciar", [["done","Partido listo","Reporte pre-partido firmado. Ya puedes iniciar el reloj (V-01)."],["btn","Ir al partido","pri"]], None, tab="Partido"),
 ]
 F["V-01"] = [
- S("Partido · antes del inicio", [["score","LOBOS","0","TOROS","0","00:00","1T"],["btn","Iniciar 1er tiempo","pri",1]], "Toca «Iniciar»", tab=None, dark=True),
- S("Reloj corriendo", [["score","LOBOS","0","TOROS","0","12:34","1T"],["btn","Pausar","sec",1],["btn","Fin del tiempo","txt"]], "Pausa o termina el tiempo", tab=None, dark=True),
- S("Medio tiempo", [["score","LOBOS","14","TOROS","7","40:00","MT"],["btn","Iniciar 2º tiempo","pri"]], None, tab=None, dark=True),
+ S("Partido · antes del inicio", [["score","LOBOS","0","TOROS","0","00:00","1T"],["kv",[["Árbitro","Roberto Díaz"],["Anotador","Elena Cruz"],["Check-in","Completo"]]],["btn","Iniciar 1er tiempo","pri",1]], "Toca «Iniciar»", tab=None, dark=True),
+ S("Reloj corriendo", [["score","LOBOS","0","TOROS","0","12:34","1T"],["kv",[["Inicio","16:02"],["Tiempo de juego","2 × 40 min"],["Pausas","0"]]],["btn","Pausar","sec",1],["btn","Fin del tiempo","txt"]], "Pausa o termina el tiempo", tab=None, dark=True),
+ S("Medio tiempo", [["score","LOBOS","14","TOROS","7","40:00","MT"],["section","Primer tiempo"],["event","31'","Ensayo · Lobos","#9 N. Bravo · +5","ok"],["event","22'","Ensayo · Toros","#11 L. Mora · +5","ok"],["event","9'","Ensayo · Lobos","#14 P. Gil · +5","ok"],["btn","Iniciar 2º tiempo","pri"]], None, tab=None, dark=True),
 ]
 F["V-02"] = [
  S("Partido en vivo", [["score","LOBOS","14","TOROS","14","53:40","2T"],["seg",["LOBOS","TOROS"],"LOBOS"],["grid",[["ENSAYO","+5"],["CONVERSIÓN","+2"],["PENAL","+3"],["DROP","+3"]],0]], "Toca «ENSAYO»", tab=None, dark=True),
@@ -184,7 +184,7 @@ F["V-04"] = [
 ]
 F["V-05"] = [
  S("Sin señal", [["score","LOBOS","19","TOROS","14","54:12","2T"],["banner","Sin conexión · 3 eventos por enviar"],["grid",[["ENSAYO","+5"],["CONVERSIÓN","+2"],["PENAL","+3"],["DROP","+3"]],1]], "Sigue registrando sin señal", tab=None, dark=True),
- S("Vuelve la señal", [["score","LOBOS","21","TOROS","14","56:02","2T"],["toast","Conexión recuperada · 4 eventos enviados"],["note","Se envían en orden y sin duplicados (SP-02)."]], None, tab=None, dark=True),
+ S("Vuelve la señal", [["score","LOBOS","21","TOROS","14","56:02","2T"],["toast","Conexión recuperada · 4 eventos enviados"],["event","56'","Conversión · Lobos","#10 C. Ruiz · enviado","ok"],["event","55'","Ensayo · Lobos","#9 N. Bravo · enviado","ok"],["note","Se envían en orden y sin duplicados (SP-02)."]], None, tab=None, dark=True),
 ]
 F["R-01"] = [
  S("Fin del partido", [["score","LOBOS","28","TOROS","17","80:00","FIN"],["btn","Cerrar partido","pri",1]], "Toca «Cerrar partido»", tab=None, dark=True),
@@ -194,56 +194,56 @@ F["R-01"] = [
 F["R-04"] = [
  S("Partido cerrado", [["score","LOBOS","28","TOROS","17","Final","2T"],["banner","1 tarjeta roja sin informe"],["btn","Redactar informe","pri",1]], "Toca «Redactar informe»", tab="Partido"),
  S("Informe disciplinario", [["h1","Informe · Roja"],["field","Jugador","#6 · T. Vega (Toros)"],["field","Minuto","66'"],["field","Hecho","Tackle alto con contacto en la cabeza"],["sig"],["btn","Enviar al comité","pri",1]], "Toca «Enviar»", tab="Partido", back="Partido"),
- S("Enviado", [["done","Informe enviado","Lo verá el Director de Competencia y el comité disciplinario."]], None, tab="Partido"),
+ S("Enviado", [["done","Informe enviado","Lo verá el Director de Competencia y el comité disciplinario."],["kv",[["Jugador","#6 · T. Vega (Toros)"],["Sanción","Roja · 66'"],["Estado","En revisión"]]]], None, tab="Partido"),
 ]
 # ───────────── Administrador de Torneo ─────────────
 F["O-03"] = [
- S("Torneo", [["h1","Liga Bajío 2027"],["seg",["Equipos","Fixture","Oficiales"],"Equipos"],["p","0 equipos inscritos"],["btn","Inscribir equipos","pri",1]], "Toca «Inscribir equipos»", tab="Torneos"),
+ S("Torneo", [["h1","Liga Bajío 2027"],["p","XV · Rugby Querétaro · Inscripciones abiertas"],["seg",["Equipos","Fixture","Oficiales"],"Equipos"],["kv",[["Equipos inscritos","0 de 8"],["Cierre de inscripción","25 oct"],["Inicio","Sáb 31 oct"]]],["btn","Inscribir equipos","pri",1]], "Toca «Inscribir equipos»", tab="Torneos"),
  S("Elegir equipos", [["h1","Inscribir equipos"],["search","Buscar en Rugby Querétaro"],["check","Lobos",1],["check","Toros",1],["check","Halcones",1],["check","Jaguares",0],["btn","Inscribir 3 equipos","pri",1]], "Toca «Inscribir»", tab="Torneos", back="Torneo"),
- S("Inscritos", [["toast","3 equipos inscritos · se avisó a sus managers (O-04)"],["row","LB","Lobos","Plantilla pendiente","›"],["row","TR","Toros","Plantilla pendiente","›"]], None, tab="Torneos"),
+ S("Inscritos", [["toast","3 equipos inscritos · se avisó a sus managers (O-04)"],["h1","Equipos (3 de 8)"],["row","LB","Lobos","Plantilla pendiente","›"],["row","TR","Toros","Plantilla pendiente","›"],["row","HL","Halcones","Plantilla pendiente","›"]], None, tab="Torneos"),
 ]
 F["O-05"] = [
- S("Torneo", [["h1","Liga Bajío 2027"],["seg",["Equipos","Fixture","Oficiales"],"Fixture"],["p","8 equipos inscritos · sin calendario"],["btn","Generar calendario","pri",1]], "Toca «Generar calendario»", tab="Torneos"),
+ S("Torneo", [["h1","Liga Bajío 2027"],["seg",["Equipos","Fixture","Oficiales"],"Fixture"],["p","8 equipos inscritos · sin calendario"],["kv",[["Formato","Todos contra todos"],["Jornadas","7"],["Partidos","28"]]],["btn","Generar calendario","pri",1]], "Toca «Generar calendario»", tab="Torneos"),
  S("Opciones", [["h1","Generar calendario"],["chips",["Todos contra todos","Grupos + finales"],[0]],["field","Inicio","Sáb 31 oct"],["field","Canchas","Cancha 1, Cancha 2"],["btn","Generar","pri",1]], "Toca «Generar»", tab="Torneos", back="Torneo"),
  S("Calendario", [["h1","Fixture"],["section","Jornada 1 · Sáb 31 oct"],["card","Lobos vs Toros","16:00 · Cancha 1","Sin oficiales","PROGRAMADO"],["card","Halcones vs Jaguares","18:00 · Cancha 2","Sin oficiales","PROGRAMADO"],["btn","Publicar","pri"]], None, tab="Torneos"),
 ]
 F["P-01"] = [
- S("Fixture", [["h1","Fixture"],["card","Lobos vs Toros","Sáb 14 nov · 16:00","Sin oficiales","PROGRAMADO",1]], "Toca el partido", tab="Torneos"),
+ S("Fixture", [["h1","Fixture"],["section","Jornada 3 · Sáb 14 nov"],["card","Lobos vs Toros","16:00 · Cancha 1","Sin oficiales","PROGRAMADO",1],["card","Halcones vs Jaguares","18:00 · Cancha 2","R. Díaz · E. Cruz","LISTO"],["card","Águilas vs Osos","16:00 · Cancha 2","Sin oficiales","PROGRAMADO"]], "Toca el partido", tab="Torneos"),
  S("Asignar oficiales", [["h1","Oficiales"],["field","Árbitro central","Roberto Díaz",1],["field","Anotador","Elena Cruz"],["field","Juez de línea","—"],["btn","Guardar","pri",1]], "Toca «Guardar»", tab="Torneos", back="Fixture"),
- S("Asignados", [["toast","Se avisó a los oficiales"],["card","Lobos vs Toros","Sáb 14 nov · 16:00","R. Díaz · E. Cruz","LISTO"]], None, tab="Torneos"),
+ S("Asignados", [["toast","Se avisó a los oficiales"],["h1","Fixture"],["card","Lobos vs Toros","Sáb 14 nov · 16:00","R. Díaz · E. Cruz","LISTO"],["card","Halcones vs Jaguares","18:00 · Cancha 2","R. Díaz · E. Cruz","LISTO"],["card","Águilas vs Osos","16:00 · Cancha 2","Sin oficiales","PROGRAMADO"]], None, tab="Torneos"),
 ]
 # ───────────── Director de Competencia ─────────────
 F["O-01"] = [
- S("Mi comunidad", [["h1","Rugby Querétaro"],["p","Director de Competencia"],["btn","Nuevo torneo","pri",1],["section","Torneos"],["card","Copa Seven","7s","Inscripciones","INSCRIPCIÓN"]], "Toca «Nuevo torneo»", tab="Torneos"),
+ S("Mi comunidad", [["h1","Rugby Querétaro"],["p","Director de Competencia"],["btn","Nuevo torneo","pri",1],["stat",[["12","Equipos"],["340","Miembros"],["2","Torneos"]]],["section","Torneos"],["card","Copa Seven","7s · 12 equipos","Inscripciones","INSCRIPCIÓN"],["card","Liga Bajío 2026","XV · 8 equipos","Campeón: Lobos","FINAL"]], "Toca «Nuevo torneo»", tab="Torneos"),
  S("Nuevo torneo", [["h1","Nuevo torneo"],["field","Nombre","Liga Bajío 2027"],["chips",["Sevens","Tens","Rugby 13","XV","Festival"],[3]],["kv",[["Ensayo","5 pts"],["Tiempos","2 × 40 min"],["Amarilla","10 min"]]],["btn","Crear torneo","pri",1]], "Toca «Crear torneo»", tab="Torneos", back="Comunidad"),
- S("Torneo creado", [["done","Liga Bajío 2027","Creado con las reglas de XV. Ajústalas (O-02) y nombra administradores (A-02)."]], None, tab="Torneos"),
+ S("Torneo creado", [["done","Liga Bajío 2027","Creado con las reglas de XV. Ajústalas (O-02) y nombra administradores (A-02)."],["kv",[["Modalidad","XV"],["Tiempos","2 × 40 min"],["Administradores","Ninguno"]]]], None, tab="Torneos"),
 ]
 F["O-02"] = [
- S("Torneo", [["h1","Liga Bajío 2027"],["row","⚙","Reglas del torneo","XV · por defecto","›",1]], "Toca «Reglas»", tab="Torneos"),
+ S("Torneo", [["h1","Liga Bajío 2027"],["p","XV · 8 equipos · Director: Jaime Morales"],["row","⚙","Reglas del torneo","XV · por defecto","›",1],["row","AD","Administradores","Elena Cruz","›"],["row","FX","Fixture","Sin generar","›"]], "Toca «Reglas»", tab="Torneos"),
  S("Reglas", [["h1","Reglas"],["kv",[["Victoria","4"],["Empate","2"],["Bonus ofensivo","4 ensayos"],["Bonus defensivo","≤ 7"]]],["field","Minutos por tiempo","35",1],["btn","Guardar","pri",1]], "Toca «Guardar»", tab="Torneos", back="Torneo"),
- S("Guardadas", [["toast","Reglas actualizadas para Liga Bajío 2027"]], None, tab="Torneos"),
+ S("Guardadas", [["toast","Reglas actualizadas para Liga Bajío 2027"],["h1","Reglas"],["kv",[["Victoria","4"],["Empate","2"],["Bonus ofensivo","4 ensayos"],["Bonus defensivo","≤ 7"],["Minutos por tiempo","35"]]]], None, tab="Torneos"),
 ]
 F["O-06"] = [
- S("Nuevo torneo", [["h1","Nuevo torneo"],["chips",["Sevens","Tens","Rugby 13","XV","Festival"],[4],4]], "Elige «Festival»", tab="Torneos"),
- S("Festival", [["h1","Festival infantil"],["field","Categoría","Sub-10"],["note","Los festivales no llevan marcador ni tabla: solo registran participación."],["btn","Crear festival","pri",1]], "Toca «Crear festival»", tab="Torneos", back="Nuevo"),
- S("Festival creado", [["done","Festival Sub-10","Los partidos registran asistencia, sin marcador."]], None, tab="Torneos"),
+ S("Nuevo torneo", [["h1","Nuevo torneo"],["field","Nombre","Festival infantil otoño"],["p","Modalidad"],["chips",["Sevens","Tens","Rugby 13","XV","Festival"],[4],4],["note","Festival: categorías formativas, sin marcador ni tabla."]], "Elige «Festival»", tab="Torneos"),
+ S("Festival", [["h1","Festival infantil"],["field","Categoría","Sub-10"],["field","Fecha","Dom 22 nov"],["field","Sede","Club Lobos · Cancha 3"],["note","Los festivales no llevan marcador ni tabla: solo registran participación."],["btn","Crear festival","pri",1]], "Toca «Crear festival»", tab="Torneos", back="Nuevo"),
+ S("Festival creado", [["done","Festival Sub-10","Los partidos registran asistencia, sin marcador."],["kv",[["Fecha","Dom 22 nov"],["Sede","Club Lobos · Cancha 3"],["Equipos invitados","6"]]]], None, tab="Torneos"),
 ]
 F["A-02"] = [
- S("Torneo", [["h1","Liga Bajío 2027"],["row","AD","Administradores","Ninguno","›",1]], "Toca «Administradores»", tab="Torneos"),
- S("Nombrar administrador", [["h1","Administradores"],["search","Buscar en la comunidad"],["row","EC","Elena Cruz","Rugby Querétaro","Añadir",1]], "Toca «Añadir»", tab="Torneos", back="Torneo"),
- S("Nombrado", [["toast","Elena Cruz ya administra Liga Bajío 2027"],["row","EC","Elena Cruz","Administradora","✓"]], None, tab="Torneos"),
+ S("Torneo", [["h1","Liga Bajío 2027"],["p","XV · 8 equipos"],["row","⚙","Reglas del torneo","XV","›"],["row","AD","Administradores","Ninguno","›",1],["row","FX","Fixture","Sin generar","›"]], "Toca «Administradores»", tab="Torneos"),
+ S("Nombrar administrador", [["h1","Administradores"],["search","Buscar en la comunidad"],["row","EC","Elena Cruz","Rugby Querétaro","Añadir",1],["row","RD","Roberto Díaz","Árbitro","Añadir"],["row","JL","Jorge López","Entrenador · Lobos","Añadir"]], "Toca «Añadir»", tab="Torneos", back="Torneo"),
+ S("Nombrado", [["toast","Elena Cruz ya administra Liga Bajío 2027"],["h1","Administradores"],["row","EC","Elena Cruz","Administradora","✓"],["note","Podrá inscribir equipos, generar el fixture y asignar oficiales."]], None, tab="Torneos"),
 ]
 F["M-02"] = [
- S("Reglas", [["h1","Reglas"],["row","≡","Orden de desempate","Por defecto","›",1]], "Toca «Orden de desempate»", tab="Torneos"),
+ S("Reglas", [["h1","Reglas"],["kv",[["Victoria","4"],["Empate","2"],["Bonus","4 ensayos · ≤ 7"]]],["row","≡","Orden de desempate","Por defecto","›",1]], "Toca «Orden de desempate»", tab="Torneos"),
  S("Desempate", [["h1","Orden de desempate"],["row","1","Puntos","","≡"],["row","2","Diferencia de puntos","","≡"],["row","3","Ensayos a favor","","≡"],["row","4","Enfrentamiento directo","","≡"],["btn","Guardar orden","pri",1]], "Arrastra y guarda", tab="Torneos", back="Reglas"),
- S("Aplicado", [["toast","La tabla se recalculó con el nuevo orden"]], None, tab="Torneos"),
+ S("Aplicado", [["toast","La tabla se recalculó con el nuevo orden"],["h1","Tabla"],["table",["#","Equipo","PJ","Dif","Pts"],[["1","Lobos","3","+41","14"],["2","Águilas","3","+18","10"],["3","Toros","3","+9","10"],["4","Halcones","3","−4","6"]]],["note","Águilas y Toros empatan en puntos: decide la diferencia."]], None, tab="Torneos"),
 ]
 # ───────────── MasterUser ─────────────
 F["A-01"] = [
- S("Mi comunidad", [["h1","Rugby Querétaro"],["p","MasterUser"],["row","DC","Directores de Competencia","1","›",1]], "Toca «Directores»", tab="Inicio"),
- S("Nombrar director", [["h1","Directores"],["search","Buscar perfil"],["row","JM","Jaime Morales","Rugby Querétaro","Nombrar",1]], "Toca «Nombrar»", tab="Inicio", back="Comunidad"),
+ S("Mi comunidad", [["h1","Rugby Querétaro"],["p","MasterUser"],["stat",[["12","Equipos"],["340","Miembros"],["2","Torneos"]]],["row","DC","Directores de Competencia","1","›",1],["row","MD","Médicos","3","›"],["row","TU","Tutelas por validar","2","›"]], "Toca «Directores»", tab="Inicio"),
+ S("Nombrar director", [["h1","Directores"],["search","Buscar perfil"],["row","JM","Jaime Morales","Rugby Querétaro","Nombrar",1],["row","LH","Laura Hernández","Padre / Tutor","Nombrar"],["row","EC","Elena Cruz","Administradora","Nombrar"]], "Toca «Nombrar»", tab="Inicio", back="Comunidad"),
  S("Confirmar", [["h1","Directores"],["sheet","¿Nombrar a Jaime Morales?"],["p","Podrá crear torneos y nombrar administradores."],["btn","Nombrar director","pri",1]], "Confirma", tab="Inicio"),
- S("Nombrado", [["toast","Jaime Morales es Director de Competencia"],["row","JM","Jaime Morales","Director","✓"]], None, tab="Inicio"),
+ S("Nombrado", [["toast","Jaime Morales es Director de Competencia"],["h1","Directores"],["row","JM","Jaime Morales","Director","✓"],["row","AR","Alberto Ríos","Director","✓"]], None, tab="Inicio"),
 ]
 
 N = json.load(open(os.path.join(os.path.dirname(__file__), "notion.json")))

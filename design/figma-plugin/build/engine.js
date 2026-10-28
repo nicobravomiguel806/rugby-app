@@ -18,16 +18,26 @@ const BOARD = { page: "#1E1E1E", header: "#D9D9D9", headerText: "#000000", story
 
 // ── Tipografías ────────────────────────────────────────────────────────────
 const FONTS = {};
+// Una fuente cuenta solo si carga Y dibuja texto con tamaño real. En Figma de escritorio, una fuente del
+// sistema (p. ej. SF Pro) puede "cargar" y aun así dibujar el texto vacío y con alto 0; por eso se prueba.
 async function pick(cands) {
-  for (const f of cands) { try { await figma.loadFontAsync(f); return f; } catch (e) { /* siguiente */ } }
+  for (const f of cands) {
+    try {
+      await figma.loadFontAsync(f);
+      const t = figma.createText(); t.fontName = f; t.fontSize = 16; t.characters = "Ag 21";
+      const ok = t.width > 1 && t.height > 1; t.remove();
+      if (ok) return f;
+    } catch (e) { /* siguiente */ }
+  }
   throw new Error("No se pudo cargar ninguna fuente de: " + cands.map((f) => f.family + " " + f.style).join(", "));
 }
 async function loadFonts() {
   const inter = (s) => ({ family: "Inter", style: s });
+  // iOS: Inter (sustituto de SF Pro con métricas muy parecidas y disponible en cualquier Figma)
   FONTS.ios = {
-    r: await pick([{ family: "SF Pro Text", style: "Regular" }, { family: "SF Pro", style: "Regular" }, inter("Regular")]),
-    m: await pick([{ family: "SF Pro Text", style: "Semibold" }, { family: "SF Pro", style: "Semibold" }, inter("Semi Bold")]),
-    b: await pick([{ family: "SF Pro Display", style: "Bold" }, { family: "SF Pro", style: "Bold" }, inter("Bold")]),
+    r: await pick([inter("Regular")]),
+    m: await pick([inter("Semi Bold"), inter("Medium")]),
+    b: await pick([inter("Bold")]),
   };
   FONTS.android = {
     r: await pick([{ family: "Roboto", style: "Regular" }, inter("Regular")]),
@@ -467,9 +477,27 @@ function containers() {
   if (MODE === "pages") return figma.root.children.map((p) => ({ name: p.name, node: p }));
   return SINGLE.children.filter((n) => n.type === "SECTION").map((s) => ({ name: s.name, node: s }));
 }
+// Columnas ya existentes (de una corrida anterior): se reutilizan para que su ID —y el enlace en Notion— no cambie.
+const KEEP = {}; const KEEPIDS = new Set(); const REUSED = new Set();
+async function collectColumns() {
+  const re = /^([A-Z]-\d\d) · /;
+  for (const p of figma.root.children) {
+    await p.loadAsync();
+    const conts = p.name.indexOf("Rol · ") === 0 ? [{ name: p.name, node: p }]
+      : p.children.filter((n) => n.type === "SECTION" && n.name.indexOf("Rol · ") === 0).map((s) => ({ name: s.name, node: s }));
+    for (const c of conts) for (const ch of c.node.children) {
+      const m = re.exec(ch.name);
+      if (m && ch.type === "FRAME") { KEEP[c.name.slice(6) + "|" + m[1]] = ch; KEEPIDS.add(ch.id); }
+    }
+  }
+  const n = Object.keys(KEEP).length;
+  if (n) log(n + " columnas existentes se actualizarán sin cambiar su enlace.");
+}
+const parked = (n) => KEEPIDS.has(n.id) && !REUSED.has(n.id);
+
 function closeSection() {
   if (MODE !== "sections" || !pending) return;
-  const nodes = SINGLE.children.filter((n) => !pending.before.has(n.id) && n.type !== "SECTION");
+  const nodes = SINGLE.children.filter((n) => !pending.before.has(n.id) && n.type !== "SECTION" && !parked(n));
   if (!nodes.length) { pending = null; return; }
   const minX = Math.min.apply(null, nodes.map((n) => n.x)); const minY = Math.min.apply(null, nodes.map((n) => n.y));
   const maxX = Math.max.apply(null, nodes.map((n) => n.x + n.width)); const maxY = Math.max.apply(null, nodes.map((n) => n.y + n.height));
@@ -483,7 +511,11 @@ async function newPage(name) {
   if (MODE === "pages") {
     const old = figma.root.children.find((p) => p.name === name);
     const page = figma.createPage(); page.name = name;
-    if (old) { await figma.setCurrentPageAsync(page); old.remove(); }
+    if (old) {
+      await figma.setCurrentPageAsync(page);
+      for (const ch of old.children.slice()) if (KEEPIDS.has(ch.id)) page.appendChild(ch); // se conservan para reutilizarlas
+      old.remove();
+    }
     await figma.setCurrentPageAsync(page);
     page.backgrounds = solid(BOARD.page);
     return page;
@@ -494,9 +526,11 @@ async function newPage(name) {
     SINGLE.name = SINGLE_NAME;
     await figma.setCurrentPageAsync(SINGLE);
     SINGLE.backgrounds = solid("#141414");
-    for (const n of SINGLE.children.slice()) n.remove(); // se reconstruye completo en cada corrida
+    // Se reconstruye completo en cada corrida, salvo las columnas de historias, que se sacan de su sección y se reutilizan
+    for (const id of KEEPIDS) { const k = Object.values(KEEP).find((n) => n.id === id); if (k) SINGLE.appendChild(k); }
+    for (const n of SINGLE.children.slice()) if (!KEEPIDS.has(n.id)) n.remove();
   }
-  pending = { name: name, before: new Set(SINGLE.children.map((n) => n.id)) };
+  pending = { name: name, before: new Set(SINGLE.children.filter((n) => !KEEPIDS.has(n.id)).map((n) => n.id)) };
   return SINGLE;
 }
 function boardText(chars, size, weight, color, w) { return T(chars, size, FONTS.board[weight || "r"], color || "#FFFFFF", w ? { w: w } : {}); }
@@ -505,7 +539,7 @@ async function atomicPage(pl) {
   const page = await newPage("Atomic Design " + pl.label);
   const L = LIGHT; const Fb = FONTS.board;
   const head = boardText("Atomic Design · " + pl.label, 40, "b"); head.x = 0; head.y = 0;
-  const sub = boardText(pl.key === "ios" ? "Human Interface Guidelines: SF Pro, barra de pestañas inferior, títulos grandes, botones de 50 pt." : "Material 3: Roboto, barra de navegación con indicador, campos rellenos, botones píldora y FAB.", 18, "r", BOARD.muted, 900);
+  const sub = boardText(pl.key === "ios" ? "Human Interface Guidelines: Inter en el diseño (en la app, SF Pro del sistema), barra de pestañas inferior, títulos grandes, botones de 50 pt." : "Material 3: Roboto, barra de navegación con indicador, campos rellenos, botones píldora y FAB.", 18, "r", BOARD.muted, 900);
   sub.x = 0; sub.y = 56;
   const cols = { "Átomos": 0, "Moléculas": 520, "Organismos": 1040, "Plantillas": 1560 };
   const cursor = {};
@@ -573,7 +607,12 @@ const columnId = {}; // `${rol}|${historia}` → id del nodo de la columna
 
 function storyColumn(hu, roleName) {
   const st = DATA.stories[hu]; const Fb = FONTS.board;
-  const col = AL("VERTICAL", { name: hu + " · " + st.quiero, gap: 14, w: COLW });
+  let col = KEEP[roleName + "|" + hu];
+  if (col && !REUSED.has(col.id)) {
+    for (const ch of col.children) ch.remove();
+    figma.currentPage.appendChild(col); REUSED.add(col.id);
+    col.name = hu + " · " + st.quiero;
+  } else col = AL("VERTICAL", { name: hu + " · " + st.quiero, gap: 14, w: COLW });
   // Encabezado con el ID, enlazado a Notion
   const head = add(col, AL("HORIZONTAL", { name: "Encabezado", h: 48, justify: "CENTER", align: "CENTER", fill: BOARD.header }), true);
   link(add(head, T(hu, 22, Fb.b, BOARD.headerText)), st.notion);
@@ -710,12 +749,14 @@ async function main() {
   }
   const pageNames = ["Portada", "Atomic Design iOS", "Atomic Design Android"].concat(DATA.roles.map((r) => "Rol · " + r.name));
   await chooseMode(pageNames.filter((n) => !figma.root.children.find((p) => p.name === n)).length + 1);
+  await collectColumns();
 
   await coverPage();
   log("Atomic Design iOS…"); await atomicPage(PLAT.ios);
   log("Atomic Design Android…"); await atomicPage(PLAT.android);
   for (let i = 0; i < DATA.roles.length; i++) { log("Rol · " + DATA.roles[i].name + "…"); await rolePage(DATA.roles[i], i); }
   closeSection();
+  for (const k in KEEP) if (!REUSED.has(KEEP[k].id)) KEEP[k].remove(); // historias que ya no existen
   log("Enlazando dependencias…"); const n = await linkDependencies(); log(n + " dependencias enlazadas.");
   linkCover();
 
