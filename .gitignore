@@ -1,0 +1,29 @@
+# macOS / Xcode
+.DS_Store
+xcuserdata/
+DerivedData/
+*.xcuserstate
+.build/
+.swiftpm/
+ios/**/Secrets.xcconfig
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.keystore
+*.jks
+android/app/google-services.json
+
+# Supabase
+backend/supabase/.branches/
+backend/supabase/.temp/
+.env
+.env.*
+!.env.example
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+*.mobileprovision
+*.p12

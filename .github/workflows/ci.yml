@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.f.outputs.backend }}
+      ios: ${{ steps.f.outputs.ios }}
+      android: ${{ steps.f.outputs.android }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: f
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend: ['backend/**']
+            ios: ['ios/**']
+            android: ['android/**']
+
+  pr-convention:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: El título del PR lleva el ID de la historia
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "$TITLE" | grep -Eq '^(feat|fix|spike|test|docs|chore|refactor)\(((AN-)?[A-Z]-[0-9]{2}|SP-[0-9]{2})\)' \
+            || { echo "::error::Usa 'tipo(ID): descripción', p. ej. 'feat(V-02): registrar ensayo'"; exit 1; }
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  architecture-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Domain no importa frameworks (CP-001 / CP-100)
+        run: |
+          set -e
+          if grep -rEn '^import (SwiftUI|UIKit|Supabase|SwiftData|Combine)' ios/Packages/Domain/Sources; then
+            echo "::error::Domain de iOS importa un framework prohibido"; exit 1; fi
+          if grep -rEn '^import (android\.|androidx\.|io\.github\.jan\.supabase|io\.ktor)' android/domain/src/main; then
+            echo "::error::Domain de Android importa un framework prohibido"; exit 1; fi
+          echo "Regla de dependencias respetada"
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migraciones + pruebas de RLS y sincronización (CP-140 a CP-150)
+        run: ./backend/scripts/run-db-tests.sh
+
+  ios-domain:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true' || github.event_name == 'push'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests de dominio iOS (CP-120 a CP-135)
+        working-directory: ios/Packages/Domain
+        run: swift test --enable-code-coverage
+
+  android-domain:
+    needs: changes
+    if: needs.changes.outputs.android == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests de dominio Android (CP-120 a CP-135)
+        working-directory: android
+        run: gradle :domain:test
