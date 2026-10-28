@@ -1,0 +1,26 @@
+# Modelo de amenazas · Rugby App
+
+Método: STRIDE por componente, clasificado con OWASP Mobile Top 10 (2024). Cada amenaza tiene historias afectadas, protección, requisito y caso de prueba. **Estado:** *Probado* = protección implementada y con prueba en verde; *Planeado* = protección definida, se implementa con su historia.
+
+| ID | Ataque | Cómo ocurriría | Historias | Protección | RNF / OWASP | Prueba | Estado |
+|---|---|---|---|---|---|---|---|
+| AT-01 | Acceso indebido a datos de menores | Un usuario consulta la API de perfiles con su token y lista menores ajenos | C-03, C-05, C-07 | RLS `puede_ver_perfil`: menor visible solo para él, tutores, staff de su equipo y admins | RNF-04, RNF-10 · M3 | CP-140 | Probado |
+| AT-02 | Fuga de datos médicos | Un entrenador, fan o tercero lee `medical_records` | C-06, R-03 | RLS: solo jugador, tutor y médico del equipo; sin update/delete | RNF-04 · M3, M6 | CP-141, CP-142 | Probado |
+| AT-03 | Escalada de privilegios | Un usuario se autoasigna "médico", "Director" o "MasterUser" llamando a la API directamente | A-01, A-02, A-03, C-03 | Tipo médico solo lo asigna un admin; Director solo lo nombra el MasterUser; MasterUser solo por service_role | RNF-02 · M3 | CP-143 | Probado |
+| AT-04 | Manipulación del marcador (tampering) | Un fan o un oficial de otro partido envía eventos falsos, o suplanta al autor en el JSON | V-02 a V-05 | RLS: solo oficiales del partido y solo en etapa `live`; el autor lo pone `auth.uid()` | RNF-02, RNF-13 · M3, M4 | CP-146d, CP-147 | Probado |
+| AT-05 | Repudio y borrado de evidencia | Un oficial modifica o borra un evento para cambiar el resultado | V-04, R-01 | `match_events` de solo inserción (sin políticas + trigger); corrección = evento de anulación; hora de dispositivo y servidor | RNF-13 | CP-148, CP-126 | Probado |
+| AT-06 | Lectura anónima / enumeración | Llamar la API REST de Supabase sin sesión con la llave anon | Todas | `anon` sin permisos sobre tablas; todo requiere sesión | RNF-02 · M3 | CP-149, CP-150 | Probado |
+| AT-07 | Denegación de servicio por lotes enormes | Enviar miles de eventos en una llamada a `sync_match_events` | V-05, T-05 | Límite de 200 eventos por lote; rate limit de Supabase por IP | RNF-06 · M4 | CP-147c | Probado |
+| AT-08 | Inyección SQL | Texto del usuario concatenado en SQL dinámico | Todas | Solo consultas parametrizadas (PostgREST / RPC con `jsonb`); `security definer` siempre con `search_path` fijo | M4 | Revisión de PR + CP-150 | Probado (diseño) |
+| AT-09 | Secretos expuestos | Subir la llave `service_role` o certificados al repo | T-01, T-04 | `.gitignore`, gitleaks en CI, secretos en GitHub Secrets; la app solo lleva la llave `anon` | RNF-12 · M1 | CP-115 | Probado (CI) |
+| AT-10 | Robo de sesión en el dispositivo | Malware o respaldo sin cifrar lee el token | C-02 | Token en Keychain (iOS) y EncryptedSharedPreferences (Android); cerrar sesión borra datos locales | RNF-12 · M9 | CP-116, CP-155 | Planeado (SP-04) |
+| AT-11 | Suplantación de identidad / fuerza bruta | Probar contraseñas o reutilizar correos filtrados | C-01, C-02 | Supabase Auth con verificación de correo, rate limit de intentos, Sign in with Apple/Google | RNF-12 · M1, M3 | CP-012, CP-153 | Planeado (SP-04) |
+| AT-12 | Intercepción (MITM) en la cancha | Wi-Fi pública del club intercepta el tráfico | Todas | Solo HTTPS/TLS 1.2+; ATS en iOS; `cleartextTrafficPermitted=false` en Android | M5 | Revisión de configuración | Planeado (T-03) |
+| AT-13 | Alteración del reporte PDF | Editar el PDF del acta después de firmar | R-02 | El PDF incluye el hash de los eventos; se verifica contra la base | RNF-13 · M7 | CP-157 | Planeado (SP-06) |
+| AT-14 | Fuga por notificaciones o realtime | Un fan se suscribe a un canal de partido privado o recibe datos de menores en una push | V-06, F-02 | Realtime respeta RLS; las push no llevan datos personales, solo ids | RNF-04, RNF-05 · M6 | CP-156 | Planeado (SP-05) |
+
+## Prácticas transversales
+- **Mínimo privilegio:** RLS cerrada por defecto; cada política abre lo justo para una historia.
+- **Defensa en profundidad:** la app oculta lo que no se puede hacer, pero la protección real está en la base de datos.
+- **Validación en el servidor:** autoría, hora y permisos nunca se toman del cliente.
+- **Revisión por historia:** la plantilla de PR obliga a revisar esta tabla cuando una historia expone datos o permisos.
