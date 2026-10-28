@@ -541,16 +541,18 @@ async function atomicPage(pl) {
   const head = boardText("Atomic Design · " + pl.label, 40, "b"); head.x = 0; head.y = 0;
   const sub = boardText(pl.key === "ios" ? "Human Interface Guidelines: Inter en el diseño (en la app, SF Pro del sistema), barra de pestañas inferior, títulos grandes, botones de 50 pt." : "Material 3: Roboto, barra de navegación con indicador, campos rellenos, botones píldora y FAB.", 18, "r", BOARD.muted, 900);
   sub.x = 0; sub.y = 56;
-  const cols = { "Átomos": 0, "Moléculas": 520, "Organismos": 1040, "Plantillas": 1560 };
+  // Separación amplia: Figma dibuja el nombre de cada componente encima de él y, al alejar el zoom, se encima si el hueco es chico
+  const COL = 760, GAP = 160;
+  const cols = { "Átomos": 0, "Moléculas": COL, "Organismos": COL * 2, "Plantillas": COL * 3 };
   const cursor = {};
   for (const k in cols) {
-    const bar = AL("HORIZONTAL", { name: k, w: 460, h: 56, r: 4, justify: "CENTER", align: "CENTER", fill: BOARD.header });
-    add(bar, T(k, 24, Fb.b, BOARD.headerText)); bar.x = cols[k]; bar.y = 120; cursor[k] = 200;
+    const bar = AL("HORIZONTAL", { name: k, w: 560, h: 56, r: 4, justify: "CENTER", align: "CENTER", fill: BOARD.header });
+    add(bar, T(k, 24, Fb.b, BOARD.headerText)); bar.x = cols[k]; bar.y = 180; cursor[k] = 360;
   }
-  const place = (node, col) => { node.x = cols[col]; node.y = cursor[col]; cursor[col] += node.height + 32; };
+  const place = (node, col) => { node.x = cols[col]; node.y = cursor[col]; cursor[col] += node.height + GAP; };
 
   // Átomos: color, tipografía, iconos, espaciado
-  const sw = AL("VERTICAL", { name: "Color", gap: 8, pad: 16, r: 8, fill: "#FFFFFF", w: 460 });
+  const sw = AL("VERTICAL", { name: "Color", gap: 16, pad: 28, r: 12, fill: "#FFFFFF", w: 560 });
   add(sw, T("Color", 20, Fb.b, L.text));
   for (const [n, v] of [["Primario · verde cancha", L.primary], ["Acento · ámbar", L.accent], ["Fondo", L.bg], ["Superficie", L.surface], ["Texto", L.text], ["Texto suave", L.muted], ["Cancha · fondo", DARK.bg], ["Cancha · primario", DARK.primary], ["Tarjeta amarilla", STATE.yellow], ["Tarjeta roja", STATE.red], ["Éxito", STATE.ok], ["Aviso", STATE.warn]]) {
     const r = add(sw, AL("HORIZONTAL", { gap: 12, align: "CENTER" }), true);
@@ -558,17 +560,17 @@ async function atomicPage(pl) {
     add(r, T(n, 15, Fb.m, L.text)); add(r, T(v, 13, Fb.r, L.muted));
   }
   place(sw, "Átomos");
-  const ty = AL("VERTICAL", { name: "Tipografía", gap: 10, pad: 16, r: 8, fill: "#FFFFFF", w: 460 });
+  const ty = AL("VERTICAL", { name: "Tipografía", gap: 20, pad: 28, r: 12, fill: "#FFFFFF", w: 560 });
   add(ty, T("Tipografía · " + FONTS[pl.key].r.family, 20, Fb.b, L.text));
   for (const [n, size, f] of [["Título grande", 34, FONTS[pl.key].b], ["Título", 28, FONTS[pl.key].b], ["Encabezado", 17, FONTS[pl.key].m], ["Cuerpo", 17, FONTS[pl.key].r], ["Secundario", 15, FONTS[pl.key].r], ["Nota", 13, FONTS[pl.key].r], ["Marcador 21", 64, FONTS.condX]]) add(ty, T(n, size, f, L.text));
   place(ty, "Átomos");
-  const ic = AL("HORIZONTAL", { name: "Iconos", gap: 16, pad: 16, r: 8, fill: "#FFFFFF", w: 460, wrap: true });
-  for (const k in ICONS) { const c = add(ic, AL("VERTICAL", { gap: 4, align: "CENTER", w: 64 })); add(c, icon(k, 24, L.text)); add(c, T(k, 11, Fb.r, L.muted)); }
+  const ic = AL("HORIZONTAL", { name: "Iconos", gap: 28, pad: 28, r: 12, fill: "#FFFFFF", w: 560, wrap: true });
+  for (const k in ICONS) { const c = add(ic, AL("VERTICAL", { gap: 4, align: "CENTER", w: 64 })); add(c, icon(k, 28, L.text)); add(c, T(k, 12, Fb.r, L.muted)); }
   place(ic, "Átomos");
-  const sp = AL("VERTICAL", { name: "Espaciado y radios", gap: 8, pad: 16, r: 8, fill: "#FFFFFF", w: 460 });
+  const sp = AL("VERTICAL", { name: "Espaciado y radios", gap: 16, pad: 28, r: 12, fill: "#FFFFFF", w: 560 });
   add(sp, T("Espaciado y radios", 20, Fb.b, L.text));
   for (const v of [4, 8, 12, 16, 24, 32]) { const r = add(sp, AL("HORIZONTAL", { gap: 12, align: "CENTER" })); const b = figma.createRectangle(); b.resize(v, 16); b.fills = solid(L.primary); add(r, b); add(r, T(v + " px", 13, Fb.r, L.muted)); }
-  add(sp, T("Radios: botón " + pl.btnR + " · tarjeta " + pl.cardR + " · campo " + pl.fieldR + " · objetivo táctil mínimo 44 pt (RNF-08)", 13, Fb.r, L.muted, { w: 420 }));
+  add(sp, T("Radios: botón " + pl.btnR + " · tarjeta " + pl.cardR + " · campo " + pl.fieldR + " · objetivo táctil mínimo 44 pt (RNF-08)", 13, Fb.r, L.muted, { w: 500 }));
   place(sp, "Átomos");
 
   // Moléculas y organismos
@@ -581,7 +583,6 @@ async function atomicPage(pl) {
     ["Plantilla · Partido en vivo", DATA.stories["V-02"].flow[0]],
   ];
   for (const [name, spec] of samples) {
-    const lbl = boardText(name, 18, "m"); place(lbl, "Plantillas");
     const ph = phone(pl, spec); ph.name = name; place(ph, "Plantillas");
   }
   return page;
