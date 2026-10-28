@@ -477,19 +477,32 @@ function containers() {
   if (MODE === "pages") return figma.root.children.map((p) => ({ name: p.name, node: p }));
   return SINGLE.children.filter((n) => n.type === "SECTION").map((s) => ({ name: s.name, node: s }));
 }
+// Nodos de columna ya ligados en Notion (enlaces profundos de la primera corrida)
+const LINKED = new Set(["11:1299","11:1433","11:1677","11:1840","11:2061","11:2306","11:2470","11:2675","11:2835","11:3006","11:3227","11:3408","11:3610","11:3804","11:4065","11:4332","11:4518","11:4870","11:5064","11:5264","11:5472","11:5738","11:5936","11:6133","11:6228","11:6374","11:6502","11:6613","11:6700","11:6868","11:7079","11:7292","11:7487","11:7882","11:8069","11:8267","11:8452","11:8630","11:8835"]);
 // Columnas ya existentes (de una corrida anterior): se reutilizan para que su ID —y el enlace en Notion— no cambie.
-const KEEP = {}; const KEEPIDS = new Set(); const REUSED = new Set();
+const KEEP = {}; const KEEPIDS = new Set(); const REUSED = new Set(); const KEPT = [];
 async function collectColumns() {
+  // Cada historia vive en un solo rol, así que la columna se identifica solo por su ID (aunque haya cambiado de rol).
+  // Se buscan en páginas de rol, en secciones de rol y sueltas en la página (restos de corridas interrumpidas).
   const re = /^([A-Z]-\d\d) · /;
   for (const p of figma.root.children) {
     await p.loadAsync();
-    const conts = p.name.indexOf("Rol · ") === 0 ? [{ name: p.name, node: p }]
-      : p.children.filter((n) => n.type === "SECTION" && n.name.indexOf("Rol · ") === 0).map((s) => ({ name: s.name, node: s }));
-    for (const c of conts) for (const ch of c.node.children) {
+    const pools = [p].concat(p.children.filter((n) => n.type === "SECTION"));
+    for (const pool of pools) for (const ch of pool.children) {
       const m = re.exec(ch.name);
-      if (m && ch.type === "FRAME") { KEEP[c.name.slice(6) + "|" + m[1]] = ch; KEEPIDS.add(ch.id); }
+      if (!m || ch.type !== "FRAME") continue;
+      const key = m[1];
+      // Si una historia aparece repetida se conserva una sola: la que ya está ligada en Notion
+      // (y si ninguna lo está, la más completa)
+      const prev = KEEP[key];
+      if (prev) {
+        const score = (n) => (LINKED.has(n.id) ? 1e6 : 0) + n.children.length;
+        if (score(ch) <= score(prev)) continue;
+      }
+      KEEP[key] = ch;
     }
   }
+  for (const k in KEEP) { KEEPIDS.add(KEEP[k].id); KEPT.push(KEEP[k]); }
   const n = Object.keys(KEEP).length;
   if (n) log(n + " columnas existentes se actualizarán sin cambiar su enlace.");
 }
@@ -527,7 +540,7 @@ async function newPage(name) {
     await figma.setCurrentPageAsync(SINGLE);
     SINGLE.backgrounds = solid("#141414");
     // Se reconstruye completo en cada corrida, salvo las columnas de historias, que se sacan de su sección y se reutilizan
-    for (const id of KEEPIDS) { const k = Object.values(KEEP).find((n) => n.id === id); if (k) SINGLE.appendChild(k); }
+    for (const k of KEPT) SINGLE.appendChild(k);
     for (const n of SINGLE.children.slice()) if (!KEEPIDS.has(n.id)) n.remove();
   }
   pending = { name: name, before: new Set(SINGLE.children.filter((n) => !KEEPIDS.has(n.id)).map((n) => n.id)) };
@@ -608,10 +621,14 @@ const columnId = {}; // `${rol}|${historia}` → id del nodo de la columna
 
 function storyColumn(hu, roleName) {
   const st = DATA.stories[hu]; const Fb = FONTS.board;
-  let col = KEEP[roleName + "|" + hu];
+  let col = KEEP[hu];
   if (col && !REUSED.has(col.id)) {
     for (const ch of col.children) ch.remove();
     figma.currentPage.appendChild(col); REUSED.add(col.id);
+    // Se le devuelve el formato de columna por si el nodo reutilizado lo perdió
+    col.layoutMode = "VERTICAL"; col.itemSpacing = 14; col.fills = [];
+    col.paddingLeft = 0; col.paddingRight = 0; col.paddingTop = 0; col.paddingBottom = 0;
+    col.resize(COLW, Math.max(1, col.height)); col.primaryAxisSizingMode = "AUTO"; col.counterAxisSizingMode = "FIXED";
     col.name = hu + " · " + st.quiero;
   } else col = AL("VERTICAL", { name: hu + " · " + st.quiero, gap: 14, w: COLW });
   // Encabezado con el ID, enlazado a Notion
@@ -659,17 +676,17 @@ async function rolePage(role, idx) {
   const head = boardText(role.name, 44, "b"); head.x = 0; head.y = 0;
   const desc = boardText(role.desc, 18, "r", BOARD.muted, 1200); desc.x = 0; desc.y = 60;
   const legend = boardText("Cómo leer esta página: cada columna es una historia de usuario (el ID abre Notion). Debajo está la ruta completa, paso a paso, hasta cumplir el objetivo. El borde ámbar marca el toque que lleva a la siguiente pantalla. Las flechas grises de arriba son dependencias: la historia de origen debe estar terminada antes.", 14, "r", BOARD.story, 1200);
-  legend.x = 0; legend.y = 96;
+  legend.x = 0; legend.y = desc.y + desc.height + 16;
 
   const ordered = topoOrder(role.hus);
   // Agrupar por actividad conservando el orden
   const groups = []; ordered.forEach((h) => { const act = DATA.stories[h].act; let g = groups.find((x) => x.act === act); if (!g) { g = { act: act, hus: [] }; groups.push(g); } g.hus.push(h); });
   // Las actividades siguen el orden del story map
-  const ACT_ORDER = ["Unirme a la comunidad", "Formar equipo", "Administrar la competencia", "Organizar el torneo", "Preparar el partido", "Jugar el partido", "Cerrar y reportar", "Consultar resultados", "Seguir y enterarme"];
+  const ACT_ORDER = ["Inicio (Home)", "Unirme a la comunidad", "Formar equipo", "Administrar la competencia", "Organizar el torneo", "Preparar el partido", "Jugar el partido", "Cerrar y reportar", "Consultar resultados", "Seguir y enterarme"];
   groups.sort((a, b) => ACT_ORDER.indexOf(a.act) - ACT_ORDER.indexOf(b.act));
 
   const intraDeps = []; ordered.forEach((h) => DATA.stories[h].deps.forEach((d) => { if (role.hus.indexOf(d) >= 0) intraDeps.push([d, h]); }));
-  const laneTop = 200; const laneH = Math.max(1, intraDeps.length) * 16 + 40;
+  const laneTop = legend.y + legend.height + 80; const laneH = Math.max(1, intraDeps.length) * 16 + 40;
   const barY = laneTop + laneH; const colY = barY + 80;
   let x = 0; const pos = {};
   for (const g of groups) {
@@ -692,7 +709,7 @@ async function rolePage(role, idx) {
     const x1 = pos[from] + COLW / 2 - 40 + (i % 5) * 8; const x2 = pos[to] + COLW / 2 + 40 - (i % 5) * 8;
     await arrow([[x1, barY - 6], [x1, y], [x2, y], [x2, barY - 6]], color);
   }
-  const depNote = boardText(intraDeps.length ? "Dependencias en esta página: " + intraDeps.map((p) => p[0] + " → " + p[1]).join(" · ") : "Las historias de este rol dependen de historias de otros roles (ver «Depende de» en cada columna).", 13, "r", BOARD.muted, 1400);
+  const depNote = boardText(!role.hus.length ? "Este rol no tiene historias propias: todo lo que hace está en «Todos los usuarios»." : intraDeps.length ? "Dependencias en esta página: " + intraDeps.map((p) => p[0] + " → " + p[1]).join(" · ") : "Las historias de este rol dependen de historias de otros roles (ver «Depende de» en cada columna).", 13, "r", BOARD.muted, 1400);
   depNote.x = 0; depNote.y = laneTop - 32;
   return page;
 }
@@ -729,12 +746,15 @@ async function coverPage() {
     coverRows[r.name] = add(row, boardText(r.name + " ↗", 22, "b")); add(row, boardText(r.hus.join(" · "), 16, "r", BOARD.muted));
     row.x = 0; row.y = y; y += 44;
   }
+  y += 24;
+  coverRows.__home = boardText("Ver la Home de la app (C-08 · inicio por rol) ↗", 22, "b", STATE.tap); coverRows.__home.x = 0; coverRows.__home.y = y;
 }
 function linkCover() {
   for (const r of DATA.roles) {
     const target = containers().find((c) => c.name === "Rol · " + r.name);
     if (target && coverRows[r.name]) link(coverRows[r.name], target.node.id, "NODE");
   }
+  if (coverRows.__home && roleOf["C-08"]) link(coverRows.__home, roleOf["C-08"].id, "NODE");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -757,7 +777,9 @@ async function main() {
   log("Atomic Design Android…"); await atomicPage(PLAT.android);
   for (let i = 0; i < DATA.roles.length; i++) { log("Rol · " + DATA.roles[i].name + "…"); await rolePage(DATA.roles[i], i); }
   closeSection();
-  for (const k in KEEP) if (!REUSED.has(KEEP[k].id)) KEEP[k].remove(); // historias que ya no existen
+  for (const k of KEPT) if (!REUSED.has(k.id) && !k.removed) k.remove(); // historias que ya no existen o cambiaron de rol
+  // Limpieza final: en modo secciones no debe quedar nada suelto fuera de las secciones
+  if (MODE === "sections") for (const n of SINGLE.children.slice()) if (n.type !== "SECTION") n.remove();
   log("Enlazando dependencias…"); const n = await linkDependencies(); log(n + " dependencias enlazadas.");
   linkCover();
 

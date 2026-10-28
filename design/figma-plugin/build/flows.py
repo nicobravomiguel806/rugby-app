@@ -5,20 +5,20 @@ Un 1 al final de un elemento marca el toque que lleva a la siguiente pantalla (s
 import json, os
 
 ROLES = [
- ("Todos los usuarios", "Lo que cualquier persona hace en la app, tenga el rol que tenga.", ["C-01","C-02","C-03","C-08","C-07","M-05","F-03"]),
- ("Fan", "Sigue equipos, torneos y marcadores sin estar en la cancha.", ["F-01","V-06","F-02","M-01","M-03","M-04"]),
- ("Jugador", "Completa sus datos deportivos, se une a un equipo y consulta su rendimiento.", ["C-04","E-02","E-04","M-03"]),
- ("Padre / Tutor", "Autoriza y acompaña a su hijo menor de edad.", ["C-05"]),
- ("Entrenador / Manager", "Forma y administra su equipo, registra plantillas y alineaciones.", ["E-01","E-03","E-04","O-04","P-02","R-02"]),
- ("Médico", "Registra aptitud y lesiones de los jugadores de su equipo. Datos de acceso restringido.", ["C-06","R-03"]),
- ("Árbitro / Anotador", "Opera el partido en la cancha: check-in, reloj, anotaciones, tarjetas y cierre.", ["P-03","V-01","V-02","V-03","V-04","V-05","R-01","R-04"]),
- ("Administrador de Torneo", "Opera el día a día del torneo: inscripciones, calendario, oficiales y reportes.", ["O-03","O-05","P-01","R-02"]),
- ("Director de Competencia", "Crea y configura torneos de su comunidad y nombra administradores.", ["O-01","O-02","O-06","A-02","M-02"]),
- ("MasterUser", "Dueño de la comunidad: nombra a los Directores de Competencia.", ["A-01"]),
+ ("Todos los usuarios", "Lo que cualquier persona ve y hace en la app, tenga el rol que tenga: inicio, partidos en vivo, equipos, torneos, tablas, estadísticas y seguir. Los demás roles tienen esto MÁS lo de su página.", ["C-08","C-01","C-02","C-03","C-07","M-05","V-06","M-01","E-04","M-03","M-04","F-01","F-02","F-03"]),
+ ("Fan", "El Fan tiene exactamente lo de «Todos los usuarios» (inicio, partidos en vivo, equipos, torneos, tablas, estadísticas, seguir y notificaciones). No tiene acciones extra.", []),
+ ("Jugador", "Además de lo de «Todos los usuarios»: completa sus datos deportivos y solicita unirse a un equipo.", ["C-04","E-02"]),
+ ("Padre / Tutor", "Además de lo de «Todos los usuarios»: autoriza y acompaña a su hijo menor de edad.", ["C-05"]),
+ ("Entrenador / Manager", "Además de lo de «Todos los usuarios»: forma y administra su equipo, registra plantillas y alineaciones. También descarga el reporte del partido (R-02, en Administrador de Torneo).", ["E-01","E-03","O-04","P-02"]),
+ ("Médico", "Además de lo de «Todos los usuarios»: registra aptitud y lesiones de los jugadores de su equipo. Datos de acceso restringido.", ["C-06","R-03"]),
+ ("Árbitro / Anotador", "Además de lo de «Todos los usuarios»: opera el partido en la cancha: check-in, reloj, anotaciones, tarjetas y cierre.", ["P-03","V-01","V-02","V-03","V-04","V-05","R-01","R-04"]),
+ ("Administrador de Torneo", "Además de lo de «Todos los usuarios»: opera el día a día del torneo: inscripciones, calendario, oficiales y reportes.", ["O-03","O-05","P-01","R-02"]),
+ ("Director de Competencia", "Además de lo de «Todos los usuarios»: crea y configura torneos de su comunidad y nombra administradores.", ["O-01","O-02","O-06","A-02","M-02"]),
+ ("MasterUser", "Además de lo de «Todos los usuarios»: dueño de la comunidad, nombra a los Directores de Competencia.", ["A-01"]),
 ]
 
 ACT = {"C":"Unirme a la comunidad","E":"Formar equipo","A":"Administrar la competencia","O":"Organizar el torneo",
-       "P":"Preparar el partido","V":"Jugar el partido","R":"Cerrar y reportar","M":"Consultar resultados","F":"Seguir y enterarme"}
+       "H":"Inicio (Home)", "P":"Preparar el partido","V":"Jugar el partido","R":"Cerrar y reportar","M":"Consultar resultados","F":"Seguir y enterarme"}
 
 DEPS = {
  "C-01":[], "C-08":["C-03"], "M-05":["O-05","V-02","R-01"], "C-02":["C-01"], "C-03":["C-01"], "C-04":["C-03"], "C-05":["C-03"], "C-06":["C-03","E-03"], "C-07":["C-03"],
@@ -73,7 +73,11 @@ F["C-08"] = [
  S("Inicio · Fan", [["h1","¡Hola, Ana!"],["p","Lo que sigues · Rugby Querétaro"],["section","En vivo"],["card","Lobos 21 – 14 Toros","2T · 54'","Liga Bajío · Jornada 3","EN VIVO",1],["section","Próximos"],["card","Águilas vs Osos","Sáb 21 nov · 16:00 · Cancha 2","Liga Bajío · Jornada 4","PROGRAMADO"],["actions",["Partidos","Tabla","Siguiendo","Feed"],None]], "El inicio cambia según el rol · Jugador"),
  S("Inicio · Jugador", [["h1","¡Hola, Nicolás!"],["p","Jugador · Lobos de Querétaro"],["section","Tu próximo partido"],["card","Lobos vs Toros","Sáb 14 nov · 16:00 · Cancha 1","Convocado · Medio scrum #9","PROGRAMADO"],["stat",[["3","Partidos"],["2","Ensayos"],["10","Puntos"]]],["section","Pendientes"],["row","!","Revisión médica","Vence el 10 nov","›"],["actions",["Mi equipo","Partidos","Tabla","Perfil"],None]], "Entrenador / Manager"),
  S("Inicio · Entrenador", [["h1","¡Hola, Jorge!"],["p","Entrenador · Lobos de Querétaro"],["section","Pendientes"],["row","3","Solicitudes por aprobar","E-03","›"],["row","AL","Alineación vs Toros","Cierra sáb 14 nov · 14:00","›"],["row","PL","Plantilla Liga Bajío","23 de 30 registrados","›"],["section","Próximo partido"],["card","Lobos vs Toros","Sáb 14 nov · 16:00 · Cancha 1","Árbitro: R. Díaz","PRE"]], "Árbitro / Anotador"),
- S("Inicio · Árbitro", [["h1","¡Hola, Roberto!"],["p","Árbitro · Rugby Querétaro"],["section","Hoy arbitras"],["card","Lobos vs Toros","Hoy · 16:00 · Cancha 1","Check-in pendiente","PRE",1],["section","Esta semana"],["card","Halcones vs Jaguares","Sáb 21 nov · 18:00 · Cancha 2","Anotador","PROGRAMADO"],["row","R4","Informe disciplinario","1 roja sin informe","›"]], "Sin señal: muestra lo último guardado"),
+ S("Inicio · Árbitro", [["h1","¡Hola, Roberto!"],["p","Árbitro · Rugby Querétaro"],["section","Hoy arbitras"],["card","Lobos vs Toros","Hoy · 16:00 · Cancha 1","Check-in pendiente","PRE",1],["section","Esta semana"],["card","Halcones vs Jaguares","Sáb 21 nov · 18:00 · Cancha 2","Anotador","PROGRAMADO"],["row","R4","Informe disciplinario","1 roja sin informe","›"]], "Padre / Tutor"),
+ S("Inicio · Padre / Tutor", [["h1","¡Hola, Laura!"],["p","Tutora de Mateo · Lobos"],["section","Próximo partido de Mateo"],["card","Lobos vs Toros","Sáb 14 nov · 16:00 · Cancha 1","Convocado · #12","PROGRAMADO"],["section","Pendientes"],["row","!","Autorizar Festival Sub-16","Vence el 12 nov","›"],["row","MH","Aptitud médica de Mateo","Apto · revisada 2 oct","›"]], "Médico"),
+ S("Inicio · Médico", [["h1","¡Hola, Sofía!"],["p","Médico · Lobos de Querétaro"],["stat",[["25","Aptos"],["2","Restricción"],["1","No apto"]]],["section","Pendientes"],["row","MH","Lesión en Lobos vs Toros","#12 · salió al 38'","›"],["row","NB","Revisión de Nicolás Bravo","Vence el 10 nov","›"],["section","Próximo partido"],["card","Lobos vs Toros","Sáb 14 nov · 16:00","Liga Bajío · J3","PRE"]], "Administrador de Torneo"),
+ S("Inicio · Administrador", [["h1","¡Hola, Elena!"],["p","Administradora · Liga Bajío 2027"],["section","Hoy"],["card","Lobos 21 – 14 Toros","2T · 54' · Cancha 1","Liga Bajío · J3","EN VIVO"],["section","Pendientes"],["row","OF","Asignar oficiales","Águilas vs Osos · J4","›"],["row","PL","Plantillas por validar","2 equipos","›"],["row","R2","Reportes por publicar","1 partido","›"]], "Director de Competencia"),
+ S("Inicio · Director", [["h1","¡Hola, Jaime!"],["p","Director de Competencia · Rugby Querétaro"],["stat",[["2","Torneos"],["12","Equipos"],["1","En vivo"]]],["section","Pendientes"],["row","R4","Informe disciplinario","Roja #6 T. Vega · Toros","›"],["row","AD","Copa Seven sin administrador","A-02","›"],["section","Torneos"],["card","Liga Bajío 2027","XV · Jornada 3 de 7","8 equipos","EN CURSO"]], "Sin señal: muestra lo último guardado"),
  S("Inicio sin conexión", [["banner","Sin conexión · datos de hace 5 min"],["h1","¡Hola, Ana!"],["section","En vivo"],["card","Lobos 21 – 14 Toros","2T · 54' · sin actualizar","Liga Bajío · Jornada 3","EN VIVO"],["note","Al volver la señal se actualiza solo."]], None),
 ]
 F["M-05"] = [
@@ -265,10 +269,15 @@ stories = {}
 for k, v in N.items():
     url, como, quiero, para, sprint, prio, ver, pts = v
     stories[k] = {"id":k,"notion":url,"android":AN.get(k),"como":como,"quiero":quiero,"para":para,"sprint":sprint,
-                  "prio":prio,"ver":ver,"pts":pts,"act":ACT[k[0]],"deps":DEPS[k],"flow":F[k]}
+                  "prio":prio,"ver":ver,"pts":pts,"act":ACT["H" if k == "C-08" else k[0]],"deps":DEPS[k],"flow":F[k]}
 missing = [k for r in ROLES for k in r[2] if k not in F]
 assert not missing, missing
 assert set(F) == set(stories), set(F) ^ set(stories)
+from collections import Counter
+dup = [k for k, n in Counter(k for r in ROLES for k in r[2]).items() if n > 1]
+assert not dup, ("historias en más de un rol", dup)
+sin_rol = set(F) - {k for r in ROLES for k in r[2]}
+assert not sin_rol, ("historias sin rol", sin_rol)
 data = {"roles":[{"name":n,"desc":d,"hus":h} for n,d,h in ROLES], "stories":stories}
 out = os.path.join(os.path.dirname(__file__), "..", "data.js")
 open(out,"w").write("// Generado por build/flows.py — no editar a mano\nconst DATA = " + json.dumps(data, ensure_ascii=False) + ";\n")

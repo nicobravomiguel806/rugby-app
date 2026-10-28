@@ -121,7 +121,7 @@
  ],
  "E-04": [
   "https://app.notion.com/404a4935d14681689659c8c688ea347e",
-  "miembro del equipo",
+  "usuario",
   "ver la plantilla agrupada por rol",
   "conocer a mi equipo",
   "S12",
@@ -131,7 +131,7 @@
  ],
  "F-01": [
   "https://app.notion.com/404a4935d146819eae9ee54361fce0d4",
-  "fan",
+  "usuario",
   "seguir equipos, torneos y jugadores",
   "personalizar lo que veo",
   "S15",
@@ -141,7 +141,7 @@
  ],
  "F-02": [
   "https://app.notion.com/404a4935d14681d6a0aef3255db186ab",
-  "seguidor",
+  "usuario",
   "recibir notificaciones de inicio, tries y resultado final",
   "no perderme lo importante",
   "S15",
@@ -161,7 +161,7 @@
  ],
  "M-01": [
   "https://app.notion.com/404a4935d14681a0a3abf3f533dac3e1",
-  "fan",
+  "usuario",
   "ver la tabla del torneo actualizada",
   "conocer la clasificación",
   "S11",
@@ -181,7 +181,7 @@
  ],
  "M-03": [
   "https://app.notion.com/404a4935d146817a8f4cdb3fea684052",
-  "jugador o fan",
+  "usuario",
   "ver puntos, tries, tarjetas y partidos jugados",
   "seguir el rendimiento",
   "S14",
@@ -191,7 +191,7 @@
  ],
  "M-04": [
   "https://app.notion.com/404a4935d146812a9cdfd094dce6a63b",
-  "fan",
+  "usuario",
   "ver máximos anotadores y estadísticas de equipo",
   "comparar desempeño",
   "S14",
@@ -381,7 +381,7 @@
  ],
  "V-06": [
   "https://app.notion.com/404a4935d14681e8a4bef693ddcc0130",
-  "fan",
+  "usuario",
   "seguir el marcador en vivo",
   "enterarme del partido aunque no esté presente",
   "S13",
