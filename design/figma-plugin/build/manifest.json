@@ -1,0 +1,11 @@
+{
+  "name": "Rugby App · Constructor de flujos",
+  "id": "rugby-app-flujos-por-rol",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "enablePrivatePluginApi": true,
+  "networkAccess": { "allowedDomains": ["none"] }
+}

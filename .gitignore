@@ -27,3 +27,6 @@ fastlane/report.xml
 fastlane/Preview.html
 *.mobileprovision
 *.p12
+design/figma-plugin/dist/
+design/figma-plugin/data.js
+!design/figma-plugin/build/
