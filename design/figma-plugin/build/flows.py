@@ -5,7 +5,7 @@ Un 1 al final de un elemento marca el toque que lleva a la siguiente pantalla (s
 import json, os
 
 ROLES = [
- ("Todos los usuarios", "Lo que cualquier persona hace en la app, tenga el rol que tenga.", ["C-01","C-02","C-03","C-07","F-03"]),
+ ("Todos los usuarios", "Lo que cualquier persona hace en la app, tenga el rol que tenga.", ["C-01","C-02","C-03","C-08","C-07","M-05","F-03"]),
  ("Fan", "Sigue equipos, torneos y marcadores sin estar en la cancha.", ["F-01","V-06","F-02","M-01","M-03","M-04"]),
  ("Jugador", "Completa sus datos deportivos, se une a un equipo y consulta su rendimiento.", ["C-04","E-02","E-04","M-03"]),
  ("Padre / Tutor", "Autoriza y acompaña a su hijo menor de edad.", ["C-05"]),
@@ -21,7 +21,7 @@ ACT = {"C":"Unirme a la comunidad","E":"Formar equipo","A":"Administrar la compe
        "P":"Preparar el partido","V":"Jugar el partido","R":"Cerrar y reportar","M":"Consultar resultados","F":"Seguir y enterarme"}
 
 DEPS = {
- "C-01":[], "C-02":["C-01"], "C-03":["C-01"], "C-04":["C-03"], "C-05":["C-03"], "C-06":["C-03","E-03"], "C-07":["C-03"],
+ "C-01":[], "C-08":["C-03"], "M-05":["O-05","V-02","R-01"], "C-02":["C-01"], "C-03":["C-01"], "C-04":["C-03"], "C-05":["C-03"], "C-06":["C-03","E-03"], "C-07":["C-03"],
  "E-01":["C-03"], "E-02":["C-03","E-01"], "E-03":["E-02"], "E-04":["E-03"],
  "A-01":["C-03"], "A-02":["A-01","O-01"],
  "O-01":["A-01"], "O-02":["O-01"], "O-03":["O-01","A-02","E-01"], "O-04":["O-03","E-03","C-04"], "O-05":["O-03"], "O-06":["O-01"],
@@ -68,6 +68,19 @@ F["F-03"] = [
  S("Inicio", home("Daniela","Rugby Querétaro",["Torneos","Mi equipo","Partidos","Feed"],3), "Toca «Feed»"),
  S("Feed del torneo", [["h1","Liga Bajío 2027"],["seg",["Feed","Tabla","Fixture"],"Feed"],["card","Final: Lobos 28 – 17 Toros","Hace 20 min","Resultado oficial","FINAL",1],["card","Cambio de cancha J4","Hace 2 h","Anuncio del Director",""],["card","Halcones 21 – 21 Jaguares","Ayer","Resultado oficial","FINAL"]], "Toca un resultado", tab="Torneos"),
  S("Resumen del partido", [["score","LOBOS","28","TOROS","17","Final","2T"],["section","Momentos"],["event","63'","Ensayo · Lobos","#14 P. Gil","ok"],["event","52'","Amarilla · Toros","#4 J. Soto","yellow"]], None, tab="Torneos", back="Feed"),
+]
+F["C-08"] = [
+ S("Inicio · Fan", [["h1","¡Hola, Ana!"],["p","Lo que sigues · Rugby Querétaro"],["section","En vivo"],["card","Lobos 21 – 14 Toros","2T · 54'","Liga Bajío · Jornada 3","EN VIVO",1],["section","Próximos"],["card","Águilas vs Osos","Sáb 21 nov · 16:00 · Cancha 2","Liga Bajío · Jornada 4","PROGRAMADO"],["actions",["Partidos","Tabla","Siguiendo","Feed"],None]], "El inicio cambia según el rol · Jugador"),
+ S("Inicio · Jugador", [["h1","¡Hola, Nicolás!"],["p","Jugador · Lobos de Querétaro"],["section","Tu próximo partido"],["card","Lobos vs Toros","Sáb 14 nov · 16:00 · Cancha 1","Convocado · Medio scrum #9","PROGRAMADO"],["stat",[["3","Partidos"],["2","Ensayos"],["10","Puntos"]]],["section","Pendientes"],["row","!","Revisión médica","Vence el 10 nov","›"],["actions",["Mi equipo","Partidos","Tabla","Perfil"],None]], "Entrenador / Manager"),
+ S("Inicio · Entrenador", [["h1","¡Hola, Jorge!"],["p","Entrenador · Lobos de Querétaro"],["section","Pendientes"],["row","3","Solicitudes por aprobar","E-03","›"],["row","AL","Alineación vs Toros","Cierra sáb 14 nov · 14:00","›"],["row","PL","Plantilla Liga Bajío","23 de 30 registrados","›"],["section","Próximo partido"],["card","Lobos vs Toros","Sáb 14 nov · 16:00 · Cancha 1","Árbitro: R. Díaz","PRE"]], "Árbitro / Anotador"),
+ S("Inicio · Árbitro", [["h1","¡Hola, Roberto!"],["p","Árbitro · Rugby Querétaro"],["section","Hoy arbitras"],["card","Lobos vs Toros","Hoy · 16:00 · Cancha 1","Check-in pendiente","PRE",1],["section","Esta semana"],["card","Halcones vs Jaguares","Sáb 21 nov · 18:00 · Cancha 2","Anotador","PROGRAMADO"],["row","R4","Informe disciplinario","1 roja sin informe","›"]], "Sin señal: muestra lo último guardado"),
+ S("Inicio sin conexión", [["banner","Sin conexión · datos de hace 5 min"],["h1","¡Hola, Ana!"],["section","En vivo"],["card","Lobos 21 – 14 Toros","2T · 54' · sin actualizar","Liga Bajío · Jornada 3","EN VIVO"],["note","Al volver la señal se actualiza solo."]], None),
+]
+F["M-05"] = [
+ S("Partidos", [["h1","Partidos"],["chips",["Mis equipos","Liga Bajío 2027","Copa Seven"],[1]],["section","En vivo"],["card","Lobos 21 – 14 Toros","2T · 54' · Cancha 1","Liga Bajío · J3","EN VIVO"],["section","Próximos"],["card","Águilas vs Osos","Sáb 21 nov · 16:00 · Cancha 2","Liga Bajío · J4","PROGRAMADO",1],["card","Halcones vs Jaguares","Sáb 21 nov · 18:00 · Cancha 2","Liga Bajío · J4","PROGRAMADO"],["section","Resultados"],["card","Lobos 28 – 17 Toros","Sáb 7 nov","Liga Bajío · J2","FINAL"]], "Toca un partido", tab="Partido"),
+ S("Detalle · Previa", [["h1","Águilas vs Osos"],["badge","PROGRAMADO","neutral"],["seg",["Previa","En vivo","Final"],"Previa"],["kv",[["Fecha","Sáb 21 nov · 16:00"],["Cancha","Cancha 2"],["Árbitro","Roberto Díaz"],["Anotador","Elena Cruz"]]],["section","Alineación Águilas (confirmada)"],["row","1","Luis Soto","Pilar izquierdo",""],["row","9","Iván Peña","Medio scrum",""],["row","10","Marco Gil","Apertura",""]], "El árbitro inicia el reloj (V-01)", tab="Partido", back="Partidos"),
+ S("Detalle · En vivo", [["score","ÁGUILAS","12","OSOS","7","38:20","1T"],["badge","EN VIVO","live"],["seg",["Previa","En vivo","Final"],"En vivo"],["section","Minuto a minuto"],["event","36'","Ensayo · Águilas","#14 L. Soto · +5","ok"],["event","29'","Amarilla · Osos","#5 D. Ruiz · vuelve 39'","yellow"],["event","21'","Ensayo · Osos","#11 J. Mora · +5","ok"],["event","12'","Penal · Águilas","#10 M. Gil · ANULADO","void"]], "El árbitro cierra el partido (R-01)", tab="Partido", back="Partidos"),
+ S("Detalle · Final", [["score","ÁGUILAS","27","OSOS","19","Final","2T"],["badge","RESULTADO OFICIAL","ok"],["seg",["Previa","En vivo","Final"],"Final"],["stat",[["4","Ensayos"],["1","Amarillas"],["0","Rojas"]]],["section","Anotadores"],["row","LS","Luis Soto","Águilas · 2 ensayos","10 pts"],["row","MG","Marco Gil","Águilas · 3 conversiones","6 pts"],["btn","Ver reporte PDF (R-02)","sec"]], None, tab="Partido", back="Partidos"),
 ]
 # ───────────── Fan ─────────────
 F["F-01"] = [
