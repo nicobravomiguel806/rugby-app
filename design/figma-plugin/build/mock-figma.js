@@ -60,7 +60,7 @@ Node.prototype.resizeWithoutConstraints = function (w, h) { if (this._type !== "
 function make(type, allowed) { const n = new Node(type, allowed); if (figma.currentPage) figma.currentPage.appendChild(n); return n; }
 const root = new Node("DOCUMENT", ["name"]);
 const figma = {
-  root, currentPage: null, fileKey: "TESTKEY1234567890123456",
+  root, currentPage: null, fileKey: "TESTKEY1234567890123456", // gitleaks:allow (clave inventada para pruebas)
   showUI() {}, ui: { postMessage(m) { if (m.type === "log") console.log("  ·", m.msg); else if (m.type === "error") { console.error("ERROR:", m.msg); process.exitCode = 1; } else if (m.type === "done") { global.__done = m; } } },
   async loadFontAsync(f) { if (!AVAILABLE.has(fkey(f))) throw new Error("fuente no disponible " + fkey(f)); loaded.add(fkey(f)); },
   async setCurrentPageAsync(p) { if (p._type !== "PAGE") throw new Error("no es página"); figma.currentPage = p; },

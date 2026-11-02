@@ -29,13 +29,13 @@ final class MotorDePartidoTests: XCTestCase {
     }
 
     func test_CP123_rojaDejaAlEquipoCon14() throws {
-        let e = try motor(.fifteens).calcular([ev(.tarjetaRoja, jugador: 4, min: 20)], alMinuto: 80)
+        let e = try motor(.fifteens).calcular([ev(.tarjetaRoja, min: 20, jugador: 4)], alMinuto: 80)
         XCTAssertEqual(e.local.enCancha, 14)
         XCTAssertEqual(e.visita.enCancha, 15)
     }
 
     func test_CP124_amarillaDura2MinEn7sY10EnXV() throws {
-        let amarilla = [ev(.tarjetaAmarilla, jugador: 3, min: 4)]
+        let amarilla = [ev(.tarjetaAmarilla, min: 4, jugador: 3)]
         XCTAssertEqual(try motor(.sevens).calcular(amarilla, alMinuto: 5).local.enCancha, 6)
         XCTAssertEqual(try motor(.sevens).calcular(amarilla, alMinuto: 6).local.enCancha, 7)
         XCTAssertEqual(try motor(.fifteens).calcular(amarilla, alMinuto: 13).local.enCancha, 14)
@@ -43,7 +43,7 @@ final class MotorDePartidoTests: XCTestCase {
     }
 
     func test_CP125_jugadorExpulsadoNoPuedeAnotar() {
-        XCTAssertThrowsError(try motor(.fifteens).calcular([ev(.tarjetaRoja, jugador: 9, min: 10), ev(.ensayo, jugador: 9, min: 30)])) {
+        XCTAssertThrowsError(try motor(.fifteens).calcular([ev(.tarjetaRoja, min: 10, jugador: 9), ev(.ensayo, min: 30, jugador: 9)])) {
             XCTAssertEqual($0 as? ErrorDeRegla, .jugadorExpulsado(9))
         }
     }
