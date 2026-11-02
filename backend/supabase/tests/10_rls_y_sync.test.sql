@@ -176,3 +176,10 @@ reset role;
 -- CP-150 · Todas las tablas tienen RLS activa
 select tests.ok((select bool_and(rowsecurity) from pg_tables where schemaname = 'public'), 'CP-150 Las 22 tablas tienen RLS activa');
 select tests.ok((select count(*) from pg_tables where schemaname = 'public') = 22, 'CP-150b El esquema tiene las 22 tablas del MER');
+
+-- CP-151 · Las funciones de permisos no están expuestas en la API (linter de Supabase, AT-01)
+select tests.ok((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.prosecdef) = 0, 'CP-151a Ninguna función SECURITY DEFINER queda en el esquema público');
+set role anon;
+select tests.lanza($$select privado.es_menor('00000000-0000-0000-0000-000000000007')$$, 'CP-151b Sin sesión no se puede consultar si un perfil es menor');
+reset role;
