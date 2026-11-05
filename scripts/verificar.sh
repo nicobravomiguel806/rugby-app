@@ -62,6 +62,11 @@ else omitir "ios"; fi
 
 # 4. Android
 if cambio android/; then
+  # Gradle y el compilador de Kotlin deben correr con Java 17 (el del CI). El Gradle de Homebrew trae
+  # el JDK más reciente, y Kotlin 2.0 no lo reconoce. En macOS se usa el JDK 17 instalado si existe.
+  if [ "$(uname)" = "Darwin" ] && J17="$(/usr/libexec/java_home -v 17 2>/dev/null)"; then
+    export JAVA_HOME="$J17"
+  fi
   GRADLE=""; [ -x android/gradlew ] && GRADLE="./gradlew"; [ -z "$GRADLE" ] && command -v gradle >/dev/null && GRADLE="gradle"
   if [ -n "$GRADLE" ]; then
     paso "android-domain (:domain:test)" bash -c "cd android && $GRADLE :domain:test --console=plain"
