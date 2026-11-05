@@ -4,7 +4,8 @@
 # En CI se usa `supabase start` + `supabase db reset` y luego este mismo archivo de pruebas con psql.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PGBIN="${PGBIN:-$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)}"
+# `|| true`: en macOS esta ruta de Linux no existe y, con pipefail, el script terminaría en silencio.
+PGBIN="${PGBIN:-$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)}"
 # macOS (Homebrew): pg_ctl está en el PATH o en el prefijo de postgresql@16 / @15.
 if [ -z "$PGBIN" ] || [ ! -x "$PGBIN/pg_ctl" ]; then
   if command -v pg_ctl >/dev/null; then PGBIN="$(dirname "$(command -v pg_ctl)")"
