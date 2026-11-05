@@ -17,6 +17,13 @@ fi
 echo "▶ xcodegen generate"
 xcodegen generate --spec project.yml --quiet
 
+# H-10: el CI compila con Xcode 15.4, que abre hasta objectVersion 63 (formato Xcode 15.3).
+OBJ_VERSION="$(sed -nE 's/^[[:space:]]*objectVersion = ([0-9]+);/\1/p' RugbyApp.xcodeproj/project.pbxproj)"
+if [ -z "$OBJ_VERSION" ] || [ "$OBJ_VERSION" -gt 63 ]; then
+  echo "::error::RugbyApp.xcodeproj tiene objectVersion ${OBJ_VERSION:-?}; Xcode 15.4 solo abre hasta 63. Fija options.projectFormat en ios/project.yml." >&2
+  exit 1
+fi
+
 echo "▶ swift test (Packages/Data)"
 (cd Packages/Data && swift test)
 

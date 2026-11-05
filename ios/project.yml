@@ -2,6 +2,8 @@
 # nadie edita el .pbxproj a mano. Lo regenera ios/scripts/build-app.sh.
 name: RugbyApp
 options:
+  # H-10: formato Xcode 15.3 (objectVersion 63) para que Xcode 15.4 del CI abra el proyecto.
+  projectFormat: xcode15_3
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
