@@ -30,3 +30,7 @@ fastlane/Preview.html
 design/figma-plugin/dist/
 design/figma-plugin/data.js
 !design/figma-plugin/build/
+
+# Claude Code (local de cada máquina)
+.claude/settings.local.json
+.claude/worktrees/
