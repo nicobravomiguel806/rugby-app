@@ -4,7 +4,6 @@ import Presentation
 
 /// Raíz de composición (ADR 0005): el único lugar que conoce Data y Presentation a la vez.
 /// Inyección manual por constructor: Data → caso de uso → ViewModel. Espejo en Android: app/di/.
-@MainActor
 final class ContenedorDeDependencias {
     private let repositorioDeReglas: RepositorioDeReglas = RepositorioDeReglasPorDefecto()
 
@@ -12,6 +11,7 @@ final class ContenedorDeDependencias {
         ObtenerModalidadesUseCase(repositorio: repositorioDeReglas)
     }
 
+    @MainActor
     func inicioViewModel() -> InicioViewModel {
         InicioViewModel(obtenerModalidades: obtenerModalidades)
     }
