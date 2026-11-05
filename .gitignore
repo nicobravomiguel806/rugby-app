@@ -6,6 +6,8 @@ DerivedData/
 .build/
 .swiftpm/
 ios/**/Secrets.xcconfig
+# El proyecto de Xcode se genera con XcodeGen desde ios/project.yml (ADR 0004)
+ios/*.xcodeproj/
 
 # Android / Gradle
 .gradle/
