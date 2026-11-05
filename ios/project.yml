@@ -1,0 +1,75 @@
+# Spec de XcodeGen (ADR 0004). El .xcodeproj se genera con `xcodegen generate` y no se versiona:
+# nadie edita el .pbxproj a mano. Lo regenera ios/scripts/build-app.sh.
+name: RugbyApp
+options:
+  # H-10: formato Xcode 15.3 (objectVersion 63) para que Xcode 15.4 del CI abra el proyecto.
+  projectFormat: xcode15_3
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  developmentLanguage: es
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+
+packages:
+  Domain:
+    path: Packages/Domain
+  Data:
+    path: Packages/Data
+  Presentation:
+    path: Packages/Presentation
+
+targets:
+  RugbyApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: RugbyApp
+        excludes:
+          - "Config/Secrets.xcconfig"
+    configFiles:
+      Debug: RugbyApp/Config/Base.xcconfig
+      Release: RugbyApp/Config/Base.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: RugbyApp
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        INFOPLIST_FILE: RugbyApp/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - package: Domain
+      - package: Data
+      - package: Presentation
+
+  RugbyAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: RugbyAppUITests
+    configFiles:
+      Debug: RugbyApp/Config/Base.xcconfig
+      Release: RugbyApp/Config/Base.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: RugbyApp
+    dependencies:
+      - target: RugbyApp
+
+schemes:
+  RugbyApp:
+    build:
+      targets:
+        RugbyApp: all
+    test:
+      config: Debug
+      targets:
+        - RugbyAppUITests
+        - package: Presentation/PresentationTests

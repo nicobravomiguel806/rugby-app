@@ -1,0 +1,10 @@
+// Configuración base de la app (ADR 0004).
+// Id PROVISIONAL de la app: único lugar donde se define el bundle id de iOS. Se decide el definitivo
+// antes del primer build a TestFlight.
+APP_BUNDLE_ID = mx.rugbyapp
+
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+
+// Llaves locales (ignorado por git). Copia Secrets.example.xcconfig a Secrets.xcconfig y llénalo.
+#include? "Secrets.xcconfig"

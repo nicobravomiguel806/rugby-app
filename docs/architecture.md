@@ -29,12 +29,20 @@ Regla de dependencias: las flechas solo apuntan hacia **Domain**. Domain no cono
 | App | target `RugbyApp` | módulo `:app` | Composición e inyección de dependencias, navegación, configuración | — |
 | Backend | `backend/supabase` | (compartido) | Migraciones, RLS, funciones SQL y Edge Functions | — |
 
-La regla se valida al compilar (cada capa es un módulo) y en CI (job `architecture-guard`, CP-001 / CP-100).
+La regla se valida al compilar (cada capa es un módulo) y en CI (job `architecture-guard`, CP-001 / CP-100). La guardia también revisa que Presentation no importe Data y que cada `*UseCase` de Domain exista con el mismo nombre en Swift y en Kotlin.
+
+## Inyección de dependencias (ADR 0005)
+
+- **iOS:** `RugbyApp/App/ContenedorDeDependencias.swift` es la raíz de composición manual: crea el repositorio de Data, el caso de uso de Domain y el ViewModel de Presentation, por constructor.
+- **Android:** Hilt, solo en `:app` (`di/ModuloDeDatos`, `di/ModuloDeCasosDeUso`). `MainActivity` recibe los casos de uso por `@Inject` y crea los ViewModels con una fábrica en cada ruta del `NavHost`; `:presentation`, `:data` y `:domain` no dependen de Hilt.
+- El proyecto de Xcode se genera con XcodeGen desde `ios/project.yml` (ADR 0004).
 
 ## Paquetes por feature
 
 Dentro de cada capa hay una carpeta por feature, con los mismos nombres en ambas plataformas:
-`Cuentas`, `Equipos`, `Administracion`, `Torneos`, `PrePartido`, `PartidoEnVivo`, `Reportes`, `Marcadores`, `Interaccion`, más `Rules` y `Sync` en Domain.
+`Inicio`, `Cuentas`, `Equipos`, `Administracion`, `Torneos`, `PrePartido`, `PartidoEnVivo`, `Reportes`, `Marcadores`, `Interaccion`, más `Rules` y `Sync` en Domain.
+
+`Inicio` (T-03) es la pantalla provisional de arranque: solo existe en Presentation y App, y muestra las modalidades que devuelve `ObtenerModalidadesUseCase`. La definitiva llega con C-08.
 
 ## Flujo de un evento de partido (offline-first)
 

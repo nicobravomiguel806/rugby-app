@@ -73,7 +73,7 @@ La sesión principal de Claude Code es el **orquestador**: llama a los agentes e
 ## Verificación local
 `./scripts/verificar.sh` corre en la Mac los mismos checks que el CI, solo para las carpetas que cambiaron: architecture-guard, gitleaks, migraciones + RLS, `swift test`, `gradle :domain:test` y, cuando existan, `ios/scripts/build-app.sh` y `android/scripts/build-app.sh` (los crean T-03 y AN-T-03).
 
-Herramientas necesarias en la Mac: Xcode 15.4+, `brew install gitleaks postgresql@16 gradle gh supabase/tap/supabase`, Docker Desktop u OrbStack (para `supabase start`), JDK 17 y Android Studio.
+Herramientas necesarias en la Mac: Xcode 15.4+, `brew install gitleaks postgresql@16 gradle gh xcodegen supabase/tap/supabase`, Docker Desktop u OrbStack (para `supabase start`), JDK 17 y Android Studio. XcodeGen genera el proyecto de Xcode (ADR 0004). El Android SDK se encuentra con `ANDROID_HOME` o con `android/local.properties` (`sdk.dir=…`, ignorado por git); si el shell no exporta `ANDROID_HOME`, crea ese archivo.
 
 ## Orden del Sprint 3 (corte en S5)
 Mitad del MVP: S0 a S5 suman **157 de 302 puntos**. Ya están en Done 12 (SP-01, SP-02, SP-03 y T-01). Quedan **145**.
