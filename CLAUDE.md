@@ -15,7 +15,12 @@ Lee también el CLAUDE.md de la carpeta en la que trabajes (ios/, android/, back
 3. Orden: Domain (entidades, reglas, tests) → Data (repositorio, DTO, migración) → Presentation (ViewModel, View).
 4. Los tests de dominio son el contrato del port: el mismo caso debe existir en Swift y en Kotlin con el mismo ID de caso (CP-xxx).
 5. Si tomas una decisión de arquitectura, regístrala en `docs/adr/`.
-6. Corre tests y build antes del commit. Commit `feat(ID): …`.
+6. Corre `./scripts/verificar.sh` antes del commit (mismos checks que el CI). Commit `feat(ID): …`.
+
+## Flujo de agentes (desde el Sprint 3)
+- `/historia <ID>` lleva la historia por planificador → programador → seguridad → revisor → corrector → entrega. Ver `docs/flujo-de-agentes.md`.
+- El contrato `docs/historias/<ID>.md` es la memoria compartida: cada agente lee todo y escribe solo su sección.
+- `main` está protegida: todo entra por PR con el CI en verde y squash merge. El PO aprueba el plan (carril completo) y el merge.
 
 ## Seguridad (ver docs/security/threat-model.md)
 - Cero secretos en el repo. Las llaves van en GitHub Secrets o en xcconfig/local.properties ignorados.

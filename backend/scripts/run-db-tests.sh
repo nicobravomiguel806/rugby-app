@@ -5,6 +5,14 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PGBIN="${PGBIN:-$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)}"
+# macOS (Homebrew): pg_ctl está en el PATH o en el prefijo de postgresql@16 / @15.
+if [ -z "$PGBIN" ] || [ ! -x "$PGBIN/pg_ctl" ]; then
+  if command -v pg_ctl >/dev/null; then PGBIN="$(dirname "$(command -v pg_ctl)")"
+  elif command -v brew >/dev/null; then
+    for v in 17 16 15; do p="$(brew --prefix "postgresql@$v" 2>/dev/null)/bin"; [ -x "$p/pg_ctl" ] && PGBIN="$p" && break; done
+  fi
+fi
+[ -x "${PGBIN:-}/pg_ctl" ] || { echo "No encontré pg_ctl. Instala PostgreSQL 15+ (brew install postgresql@16) o define PGBIN."; exit 1; }
 WORK="$(mktemp -d)"; PORT="${PORT:-54329}"
 RUN_AS=""; [ "$(id -u)" = "0" ] && RUN_AS="runuser -u postgres --" && chown postgres "$WORK"
 

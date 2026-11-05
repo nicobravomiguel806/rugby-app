@@ -58,13 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Domain no importa frameworks (CP-001 / CP-100)
-        run: |
-          set -e
-          if grep -rEn '^import (SwiftUI|UIKit|Supabase|SwiftData|Combine)' ios/Packages/Domain/Sources; then
-            echo "::error::Domain de iOS importa un framework prohibido"; exit 1; fi
-          if grep -rEn '^import (android\.|androidx\.|io\.github\.jan\.supabase|io\.ktor)' android/domain/src/main; then
-            echo "::error::Domain de Android importa un framework prohibido"; exit 1; fi
-          echo "Regla de dependencias respetada"
+        run: ./scripts/architecture-guard.sh
 
   backend:
     needs: changes
