@@ -9,6 +9,7 @@ ios/**/Secrets.xcconfig
 
 # Android / Gradle
 .gradle/
+.kotlin/
 build/
 local.properties
 *.keystore
