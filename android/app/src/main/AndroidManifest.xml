@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- AT-12: sin tráfico en claro, ni en el manifiesto ni en la configuración de red. -->
+    <!-- AT-12: sin tráfico en claro, ni en el manifiesto ni en la configuración de red.
+         SP-04 · CA-2 / AT-17: sin respaldo del sistema. allowBackup="false" no frena la transferencia entre equipos en
+         Android 12+, así que las reglas excluyen todo (sesión cifrada, keyset y base local) de cloud-backup y device-transfer. -->
     <application
         android:name=".RugbyApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/reglas_de_extraccion"
+        android:fullBackupContent="@xml/reglas_de_respaldo"
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
