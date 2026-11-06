@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- SP-04 · H-21: sin este permiso OkHttp lanza SecurityException y la app se cierra al iniciar sesión. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- AT-12: sin tráfico en claro, ni en el manifiesto ni en la configuración de red.
          SP-04 · CA-2 / AT-17: sin respaldo del sistema. allowBackup="false" no frena la transferencia entre equipos en
          Android 12+, así que las reglas excluyen todo (sesión cifrada, keyset y base local) de cloud-backup y device-transfer. -->
