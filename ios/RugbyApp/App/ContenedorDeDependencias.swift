@@ -23,10 +23,11 @@ final class ContenedorDeDependencias {
             .flatMap { ($0["CFBundleURLSchemes"] as? [String]) ?? [] }
             .first { $0.hasPrefix("com.googleusercontent.apps.") } ?? ""
 
-        repositorioDeSesion = RepositorioDeSesionSupabase(
+        // H-1: el decorador borra también el estado que GoogleSignIn deja en el Keychain.
+        repositorioDeSesion = RepositorioDeSesionSinRastroDeGoogle(RepositorioDeSesionSupabase(
             configuracion: ConfiguracionDeSupabase(url: valor("SupabaseURL"), anonKey: valor("SupabaseAnonKey")),
             almacen: AlmacenDeSesionKeychain(servicio: "\(bundleID).sesion")
-        )
+        ))
         obtenedorDeGoogle = ObtenedorDeCredencialGoogle(
             clientID: valor("GIDClientID"),
             serverClientID: valor("GIDServerClientID"),

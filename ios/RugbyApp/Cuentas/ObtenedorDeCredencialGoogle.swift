@@ -34,8 +34,12 @@ final class ObtenedorDeCredencialGoogle: ObtenedorDeCredencial {
             let resultado = try await GIDSignIn.sharedInstance.signIn(
                 withPresenting: presentador, hint: nil, additionalScopes: nil, nonce: nonceHasheado
             )
-            guard let idToken = resultado.user.idToken?.tokenString else { throw ErrorDeAutenticacion.credencialRechazada }
-            return CredencialNativa(proveedor: .google, idToken: idToken, accessToken: resultado.user.accessToken.tokenString)
+            let idToken = resultado.user.idToken?.tokenString
+            let accessToken = resultado.user.accessToken.tokenString
+            // H-1 (AT-10): tras el intercambio no se necesita la sesión de Google; se borra ya de su Keychain.
+            GIDSignIn.sharedInstance.signOut()
+            guard let idToken else { throw ErrorDeAutenticacion.credencialRechazada }
+            return CredencialNativa(proveedor: .google, idToken: idToken, accessToken: accessToken)
         } catch let error as GIDSignInError where error.code == .canceled {
             throw ErrorDeAutenticacion.cancelado
         } catch let error as ErrorDeAutenticacion {
