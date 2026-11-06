@@ -66,7 +66,14 @@ class RepositorioDeSesionSupabase internal constructor(
     override suspend fun sesionActual(): Sesion? = almacen.loadSession()?.user?.let(::sesionDe)
 
     override suspend fun borrarSesionLocal() {
-        val token = supabase?.auth?.currentAccessTokenOrNull() ?: almacen.loadSession()?.accessToken
+        // H-15 · P-8: si el almacén no se puede leer, no hay token que revocar, pero el borrado local sigue.
+        val token = supabase?.auth?.currentAccessTokenOrNull() ?: try {
+            almacen.loadSession()?.accessToken
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
         tokenPorRevocar.set(token)
         try {
             supabase?.auth?.clearSession()

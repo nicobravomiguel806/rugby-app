@@ -11,7 +11,10 @@ import java.security.KeyStore
 import java.security.ProviderException
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.delay
 import mx.rugbyapp.data.cuentas.AlmacenDeSesionCifrado
+import mx.rugbyapp.data.cuentas.ConfiguracionDeSupabase
+import mx.rugbyapp.data.cuentas.RepositorioDeSesionSupabase
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -98,6 +101,35 @@ class AlmacenDeSesionCifradoTest {
         assertNull(conKeystoreRoto.loadCodeVerifier())
         assertEquals("reintenta una vez tras descartar las llaves", 2, intentos)
         assertSinTokensEnClaro()
+    }
+
+    /**
+     * H-15 · ADR 0007: un archivo de DataStore corrupto no tira la app al abrir (ni dentro del authScope de supabase-kt):
+     * no hay sesión, cerrar sesión no lanza (P-8) y después se puede guardar y leer una sesión nueva.
+     * Usa un nombre nuevo para que el proceso no tenga ese DataStore en caché.
+     */
+    @Test fun h15_conElArchivoCorruptoNoHaySesionNiErrorYSePuedeGuardarOtra() = runBlocking {
+        val nombreNuevo = "sesion_corrupta_${UUID.randomUUID().toString().replace("-", "")}"
+        val archivo = File(contexto.filesDir, "datastore/$nombreNuevo.preferences_pb")
+        archivo.parentFile?.mkdirs()
+        archivo.writeBytes(byteArrayOf(0x7f, 0x00, 0x13, 0x37) + "basura".toByteArray())
+        try {
+            val almacen = AlmacenDeSesionCifrado(contexto, nombreNuevo, alias)
+            val repositorio = RepositorioDeSesionSupabase(ConfiguracionDeSupabase("https://x.supabase.co", "k"), almacen)
+            delay(1_500) // deja que el authScope de supabase-kt cargue la sesión del almacén al iniciar
+
+            assertNull(almacen.loadSession())
+            assertNull(repositorio.sesionActual())
+            repositorio.borrarSesionLocal() // P-8: cerrar sesión con el archivo corrupto no lanza
+
+            almacen.saveSession(sesion)
+            assertEquals(sesion.accessToken, almacen.loadSession()?.accessToken)
+            assertEquals(sesion.user?.id, AlmacenDeSesionCifrado(contexto, nombreNuevo, alias).loadSession()?.user?.id)
+            almacen.borrarTodo()
+        } finally {
+            archivo.delete()
+            contexto.getSharedPreferences("${nombreNuevo}_keyset", Context.MODE_PRIVATE).edit().clear().commit()
+        }
     }
 
     @Test fun ca2_laAppNoPermiteRespaldoDelSistema() {

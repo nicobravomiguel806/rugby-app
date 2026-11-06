@@ -6,9 +6,11 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.google.crypto.tink.Aead
@@ -165,7 +167,11 @@ class AlmacenDeSesionCifrado(
         fun dataStoreDe(app: Context, nombre: String): DataStore<Preferences> {
             val archivo = app.preferencesDataStoreFile(nombre)
             return almacenes.getOrPut(archivo.absolutePath) {
-                PreferenceDataStoreFactory.create(scope = CoroutineScope(Dispatchers.IO + SupervisorJob())) { archivo }
+                PreferenceDataStoreFactory.create(
+                    // H-15 · ADR 0007: un archivo corrupto se reemplaza por uno vacío (sin sesión), nunca un error al abrir.
+                    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+                    scope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
+                ) { archivo }
             }
         }
     }

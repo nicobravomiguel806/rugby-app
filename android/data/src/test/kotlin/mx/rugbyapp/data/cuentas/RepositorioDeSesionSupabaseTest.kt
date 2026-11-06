@@ -11,7 +11,11 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import java.io.IOException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -37,8 +41,10 @@ class RepositorioDeSesionSupabaseTest {
     private class AlmacenEnMemoria : AlmacenSeguroDeSesion {
         var sesion: UserSession? = null
         var codeVerifier: String? = null
+        var falloAlLeer: Exception? = null
+        @Volatile var lecturas = 0
         override suspend fun saveSession(session: UserSession) { sesion = session }
-        override suspend fun loadSession() = sesion
+        override suspend fun loadSession(): UserSession? { lecturas++; falloAlLeer?.let { throw it }; return sesion }
         override suspend fun deleteSession() { sesion = null }
         override suspend fun saveCodeVerifier(codeVerifier: String) { this.codeVerifier = codeVerifier }
         override suspend fun loadCodeVerifier() = codeVerifier
@@ -161,5 +167,21 @@ class RepositorioDeSesionSupabaseTest {
         servidor.responder = { throw IOException("sin red") }
 
         esperarError(ErrorDeAutenticacion.SinConexion) { repo.revocarSesionEnServidor() }
+    }
+
+    @Test fun `H-15 borrar local con el almacen ilegible no lanza y borra todo`() = runTest {
+        val servidor = ServidorFalso()
+        val almacen = AlmacenEnMemoria().apply { codeVerifier = "verificador" }
+        val repo = repositorio(servidor, almacen)
+        // Espera (en tiempo real) a que supabase-kt haga su lectura inicial, para que el fallo solo lo vea el cierre.
+        withContext(Dispatchers.Default) { withTimeoutOrNull(2_000) { while (almacen.lecturas == 0) delay(10) } }
+        almacen.falloAlLeer = IOException("archivo corrupto (simulado)")
+
+        repo.borrarSesionLocal()
+
+        assertNull(almacen.codeVerifier)
+        assertTrue("sin token no se llama a la red", servidor.pedidos.isEmpty())
+        repo.revocarSesionEnServidor()
+        assertTrue(servidor.pedidos.isEmpty())
     }
 }
