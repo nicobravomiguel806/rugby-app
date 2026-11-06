@@ -24,7 +24,11 @@ for r in json.load(sys.stdin)["runtimes"]:
 RUNTIME="$(runtime)"
 if [ -z "$RUNTIME" ]; then
   echo "▶ Descargando el runtime de iOS $VERSION" >&2
-  xcodebuild -downloadPlatform iOS -buildVersion "$VERSION" >&2
+  # -buildVersion existe desde Xcode 16 (CI: Xcode 16.4 en macos-15, que no trae runtime iOS 17 preinstalado).
+  if ! xcodebuild -downloadPlatform iOS -buildVersion "$VERSION" >&2; then
+    echo "::error::No se pudo descargar el runtime de simulador iOS $VERSION (xcodebuild -downloadPlatform). CP-111 exige iOS 17: no se usa otro runtime." >&2
+    exit 1
+  fi
   RUNTIME="$(runtime)"
 fi
 if [ -z "$RUNTIME" ]; then
