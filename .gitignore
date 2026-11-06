@@ -7,7 +7,15 @@ DerivedData/
 .swiftpm/
 ios/**/Secrets.xcconfig
 # El proyecto de Xcode se genera con XcodeGen desde ios/project.yml (ADR 0004)
-ios/*.xcodeproj/
+# SP-04 · H-2 (AT-16): excepto su Package.resolved, que fija las dependencias de la app y se versiona.
+ios/*.xcodeproj/*
+!ios/*.xcodeproj/project.xcworkspace/
+ios/*.xcodeproj/project.xcworkspace/*
+!ios/*.xcodeproj/project.xcworkspace/xcshareddata/
+ios/*.xcodeproj/project.xcworkspace/xcshareddata/*
+!ios/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+ios/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!ios/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Android / Gradle
 .gradle/
@@ -38,6 +46,3 @@ design/figma-plugin/data.js
 .claude/settings.local.json
 .claude/worktrees/
 
-# SP-04: los Package.resolved de los paquetes locales no se versionan. Xcode 27 resuelve versiones con
-# swift-tools 6.x que Xcode 15.4 (CI) no abre; sin archivo, cada Xcode elige las compatibles. Las directas van con `exact:`.
-ios/Packages/*/Package.resolved
