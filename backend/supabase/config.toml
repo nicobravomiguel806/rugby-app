@@ -21,6 +21,17 @@ minimum_password_length = 10
 enable_signup = true
 enable_confirmations = true
 
+# SP-04 · ADR 0006: inicio nativo con Google (signInWithIdToken). Solo para `supabase start` local; dev en la nube ya lo
+# configuró el PO. Necesita estas variables de entorno (el secreto nunca entra al repo):
+#   SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID = client ids separados por comas: Web primero, luego iOS y Android
+#   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET    = secreto del cliente Web
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+# P-9: nonce obligatorio. Supabase compara SHA-256(nonce crudo) con el claim `nonce` del ID token.
+skip_nonce_check = false
+
 [auth.rate_limit]
 sign_in_sign_ups = 30
 token_refresh = 150
