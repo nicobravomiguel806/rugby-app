@@ -21,6 +21,10 @@ packages:
     path: Packages/Data
   Presentation:
     path: Packages/Presentation
+  # SP-04 · AT-16: versión exacta. La misma que pide Packages/Presentation (GoogleSignInSwift).
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS.git
+    exactVersion: 9.0.0
 
 targets:
   RugbyApp:
@@ -45,6 +49,25 @@ targets:
       - package: Domain
       - package: Data
       - package: Presentation
+      - package: GoogleSignIn
+        product: GoogleSignIn
+
+  # SP-04 · Pruebas alojadas en la app (corren dentro de RugbyApp, con su Keychain): CP-154 / CP-155 / CA-1.
+  RugbyAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: RugbyAppTests
+    configFiles:
+      Debug: RugbyApp/Config/Base.xcconfig
+      Release: RugbyApp/Config/Base.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: RugbyApp
 
   RugbyAppUITests:
     type: bundle.ui-testing
@@ -71,5 +94,6 @@ schemes:
     test:
       config: Debug
       targets:
+        - RugbyAppTests
         - RugbyAppUITests
         - package: Presentation/PresentationTests

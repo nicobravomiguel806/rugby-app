@@ -9,6 +9,7 @@ Las reglas se describen aquí en lenguaje natural. El código de Swift y Kotlin 
 - El tipo **médico** solo lo asigna un administrador.
 - Los **datos médicos** los ven el propio jugador, sus tutores y el médico de su equipo. Un registro médico no se edita: se corrige con uno nuevo.
 - Jerarquía administrativa: MasterUser (creado por soporte) → nombra Directores de Competencia → nombran Administradores de Torneo.
+- **Cerrar sesión** cierra solo la sesión de este dispositivo. Primero borra siempre la sesión guardada en el dispositivo, aunque no haya red, y después intenta revocarla en el servidor; si la revocación falla, el cierre local se mantiene.
 
 ## 2. Reglas por modalidad (SP-01)
 

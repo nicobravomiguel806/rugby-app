@@ -7,7 +7,15 @@ DerivedData/
 .swiftpm/
 ios/**/Secrets.xcconfig
 # El proyecto de Xcode se genera con XcodeGen desde ios/project.yml (ADR 0004)
-ios/*.xcodeproj/
+# SP-04 · H-2 (AT-16): excepto su Package.resolved, que fija las dependencias de la app y se versiona.
+ios/*.xcodeproj/*
+!ios/*.xcodeproj/project.xcworkspace/
+ios/*.xcodeproj/project.xcworkspace/*
+!ios/*.xcodeproj/project.xcworkspace/xcshareddata/
+ios/*.xcodeproj/project.xcworkspace/xcshareddata/*
+!ios/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+ios/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!ios/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Android / Gradle
 .gradle/
@@ -37,3 +45,4 @@ design/figma-plugin/data.js
 # Claude Code (local de cada máquina)
 .claude/settings.local.json
 .claude/worktrees/
+

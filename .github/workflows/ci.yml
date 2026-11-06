@@ -72,9 +72,13 @@ jobs:
   ios-domain:
     needs: changes
     if: needs.changes.outputs.ios == 'true' || github.event_name == 'push'
-    runs-on: macos-14
+    # SP-04 · H-2: macos-14 se retiró el 2 nov 2026; mismo runner y Xcode que ios-app.
+    # SP-04 · H-18 (plan B, decisión del PO 2026-11-06): macos-15 + Xcode 16.4 por falta de capacidad de macos-26.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Xcode 16.4
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
       - name: Tests de dominio iOS (CP-120 a CP-135)
         working-directory: ios/Packages/Domain
         run: swift test --enable-code-coverage
@@ -92,18 +96,26 @@ jobs:
         working-directory: android
         run: ./gradlew :domain:test --console=plain
 
-  # T-03 · compila la app de iOS (SDK de iOS 17) y corre las pruebas de Presentation y de UI en el simulador.
+  # T-03 · compila la app de iOS y corre las pruebas alojadas, de Presentation y de UI en el simulador.
+  # SP-04 · H-2 (decisión del PO, ADR 0004): deployment target iOS 17.0 y CP-111 en un simulador con runtime
+  # iOS 17. Las dependencias salen solo de los Package.resolved versionados.
+  # SP-04 · H-18 (plan B, decisión del PO 2026-11-06): macos-15 + Xcode 16.4 por falta de capacidad de macos-26.
+  # macos-15 no trae runtime iOS 17: simulador-ios17.sh lo descarga y, si no puede, el paso falla.
   # No es requerido todavía: el PO lo agrega a la protección de main después de la primera corrida (P-7).
   ios-app:
     needs: changes
     if: needs.changes.outputs.ios == 'true' || github.event_name == 'push'
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Xcode 15.4 (SDK de iOS 17)
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      - name: Xcode 16.4
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
       - name: XcodeGen (ADR 0004)
         run: brew install xcodegen
+      - name: Simulador con runtime iOS 17 (CP-111)
+        run: |
+          DESTINO="$(./ios/scripts/simulador-ios17.sh)"
+          echo "IOS_DESTINATION=$DESTINO" >> "$GITHUB_ENV"
       - name: Build + pruebas en simulador (CA-2 / CP-111)
         run: ./ios/scripts/build-app.sh
 
