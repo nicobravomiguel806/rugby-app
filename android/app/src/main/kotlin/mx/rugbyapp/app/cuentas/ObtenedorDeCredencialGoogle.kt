@@ -56,7 +56,7 @@ class ObtenedorDeCredencialGoogle(private val serverClientId: String) : Obtenedo
         } catch (_: GoogleIdTokenParsingException) {
             throw ErrorDeAutenticacion.CredencialRechazada
         }
-        // Credential Manager no entrega access token de Google; Supabase no lo exige (el ID token no trae at_hash).
+        // Credential Manager no entrega access token de Google; Supabase solo lo pide si el ID token trae `at_hash`.
         return CredencialNativa(ProveedorDeIdentidad.GOOGLE, idToken, accessToken = null)
     }
 }
