@@ -183,3 +183,6 @@ select tests.ok((select count(*) from pg_proc p join pg_namespace n on n.oid = p
 set role anon;
 select tests.lanza($$select privado.es_menor('00000000-0000-0000-0000-000000000007')$$, 'CP-151b Sin sesión no se puede consultar si un perfil es menor');
 reset role;
+
+-- SP-04 · Usuario autenticado sin perfil (§3.3 caso de abuso 1). run-db-tests.sh solo ejecuta este archivo, así que se incluye aquí.
+\ir 20_usuario_sin_perfil.test.sql
