@@ -14,6 +14,15 @@ androidxTestRunner = "1.7.0"
 androidxTestExtJunit = "1.3.0"
 # compose ui-test trae Espresso 3.5, que falla en API 35+ (InputManager.getInstance). 3.6.1 aún falla en API 37; 3.7.0 no.
 espresso = "3.7.0"
+# SP-04 · AT-16: versiones exactas. supabase-kt 3.0.2 es la última compilada con Kotlin 2.0.21 (usa Ktor 3.0.1).
+supabase = "3.0.2"
+ktor = "3.0.1"
+coroutines = "1.9.0"
+datastore = "1.1.1"
+# ADR 0007: Tink AES-GCM con keyset envuelto por el Android Keystore (sin androidx.security:security-crypto, P-11).
+tink = "1.15.0"
+credentials = "1.3.0"
+googleid = "1.1.1"
 
 [libraries]
 junit = { module = "junit:junit", version.ref = "junit" }
@@ -35,6 +44,15 @@ hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", ve
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExtJunit" }
 androidx-test-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
+supabase-auth = { module = "io.github.jan-tennert.supabase:auth-kt", version.ref = "supabase" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
+credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
+credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -1,5 +1,5 @@
 // Data → :domain. Implementa los puertos de Domain. Sin Hilt: los módulos de DI viven en :app (ADR 0005).
-// supabase-kt y Room llegan en SP-04 / C-01.
+// SP-04: supabase-kt (Auth) y el almacén cifrado de la sesión (ADR 0007). Room llega en C-01.
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -13,11 +13,21 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    // Las pruebas unitarias crean el cliente de Supabase en la JVM; los métodos de android.jar devuelven valores por defecto.
+    testOptions { unitTests.isReturnDefaultValues = true }
 }
 
 kotlin { jvmToolchain(17) }
 
 dependencies {
     implementation(project(":domain"))
+    // api: AlmacenDeSesionCifrado implementa SessionManager de supabase-kt y :app lo construye.
+    api(libs.supabase.auth)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.datastore.preferences)
+    implementation(libs.tink.android)
+
     testImplementation(libs.junit)
+    testImplementation(libs.ktor.client.mock)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
