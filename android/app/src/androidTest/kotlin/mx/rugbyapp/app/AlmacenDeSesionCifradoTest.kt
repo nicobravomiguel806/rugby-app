@@ -8,6 +8,7 @@ import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.auth.user.UserSession
 import java.io.File
 import java.security.KeyStore
+import java.security.ProviderException
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import mx.rugbyapp.data.cuentas.AlmacenDeSesionCifrado
@@ -80,6 +81,22 @@ class AlmacenDeSesionCifradoTest {
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias)
 
         assertNull(almacen().loadSession())
+        assertSinTokensEnClaro()
+    }
+
+    /** H-14(b) · ADR 0007: si el Keystore falla también después de descartar las llaves, no hay sesión y no hay error. */
+    @Test fun h14b_siElKeystoreFallaDosVecesNoHaySesionNiError() = runBlocking {
+        almacen().saveSession(sesion)
+        almacen().saveCodeVerifier("verificador")
+        var intentos = 0
+        val conKeystoreRoto = AlmacenDeSesionCifrado(contexto, nombre, alias) {
+            intentos++
+            throw ProviderException("Keystore no disponible (simulado)")
+        }
+
+        assertNull(conKeystoreRoto.loadSession())
+        assertNull(conKeystoreRoto.loadCodeVerifier())
+        assertEquals("reintenta una vez tras descartar las llaves", 2, intentos)
         assertSinTokensEnClaro()
     }
 

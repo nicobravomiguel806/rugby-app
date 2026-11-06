@@ -22,6 +22,7 @@ import java.security.KeyStore
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.KeyGenerator
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,6 +44,8 @@ class AlmacenDeSesionCifrado(
     contexto: Context,
     private val nombre: String = "sesion",
     private val aliasDeLlave: String = "rugbyapp_sesion",
+    /** Solo para pruebas (H-14b): sustituye la creación real de la primitiva con Tink + Keystore. */
+    private val fabricaDeAead: (() -> Aead)? = null,
 ) : AlmacenSeguroDeSesion {
 
     private val app = contexto.applicationContext
@@ -86,6 +89,11 @@ class AlmacenDeSesionCifrado(
         } catch (_: IllegalArgumentException) {
             borrarTodo()
             null
+        } catch (e: Exception) {
+            // H-14(b) · ADR 0007: el Keystore falló aun después de descartar las llaves. Sin sesión, nunca un error al abrir.
+            if (e is CancellationException) throw e
+            try { borrarTodo() } catch (b: Exception) { if (b is CancellationException) throw b }
+            null
         }
     }
 
@@ -95,11 +103,12 @@ class AlmacenDeSesionCifrado(
 
     /** La primitiva AEAD. Si el keyset ya no se puede abrir con la llave del Keystore, se descarta todo y se crea uno nuevo. */
     private fun aead(): Aead = aead ?: synchronized(this) {
+        val crear = fabricaDeAead ?: ::crearAead
         aead ?: try {
-            crearAead()
+            crear()
         } catch (_: Exception) {
             descartarLlaves()
-            crearAead()
+            crear()
         }.also { aead = it }
     }
 
