@@ -37,10 +37,14 @@ if [ -z "${IOS_DESTINATION:-}" ]; then
 fi
 echo "▶ xcodebuild build test · $IOS_DESTINATION"
 
+# SP-04 · Firma ad hoc para el simulador (sin equipo de Apple): sin firma, el Keychain responde
+# errSecMissingEntitlement (-34018) y las pruebas alojadas de RugbyAppTests no pueden guardar la sesión.
+
 xcodebuild \
   -project RugbyApp.xcodeproj \
   -scheme RugbyApp \
   -destination "$IOS_DESTINATION" \
   -derivedDataPath "$IOS/build/DerivedData" \
-  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGN_IDENTITY=- \
+  CODE_SIGNING_REQUIRED=NO \
   build test
