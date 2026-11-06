@@ -50,7 +50,7 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
 
     public func borrarSesionLocal() async throws {
         let token = auth?.currentSession?.accessToken
-        candado.lock(); tokenPorRevocar = token; candado.unlock()
+        candado.withLock { tokenPorRevocar = token }
         do {
             try almacen.borrarTodo()
         } catch {
@@ -59,7 +59,7 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
     }
 
     public func revocarSesionEnServidor() async throws {
-        candado.lock(); let token = tokenPorRevocar; tokenPorRevocar = nil; candado.unlock()
+        let token: String? = candado.withLock { defer { tokenPorRevocar = nil }; return tokenPorRevocar }
         guard let token, let urlDeAuth = configuracion.urlDeAuth else { return }
 
         var componentes = URLComponents(url: urlDeAuth.appendingPathComponent("logout"), resolvingAgainstBaseURL: false)
