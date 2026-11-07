@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,8 +19,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -44,6 +43,7 @@ import mx.rugbyapp.domain.cuentas.AceptarAvisoDePrivacidadUseCase
 import mx.rugbyapp.domain.cuentas.CerrarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ConfirmarCorreoUseCase
 import mx.rugbyapp.domain.cuentas.ConsultarAvisoAceptadoUseCase
+import mx.rugbyapp.domain.cuentas.HayQuePedirElAvisoAlArrancarUseCase
 import mx.rugbyapp.domain.cuentas.IniciarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ObtenerSesionActualUseCase
 import mx.rugbyapp.domain.cuentas.RechazarAvisoDePrivacidadUseCase
@@ -60,6 +60,7 @@ import mx.rugbyapp.presentation.cuentas.CuentaActivadaScreen
 import mx.rugbyapp.presentation.cuentas.EstadoDeAcceso
 import mx.rugbyapp.presentation.cuentas.EstadoDeRegistro
 import mx.rugbyapp.presentation.cuentas.EstadoDelAviso
+import mx.rugbyapp.presentation.cuentas.EventosDeCuenta
 import mx.rugbyapp.presentation.cuentas.ProximamenteScreen
 import mx.rugbyapp.presentation.cuentas.RegistroScreen
 import mx.rugbyapp.presentation.cuentas.RegistroViewModel
@@ -88,6 +89,14 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var aceptarAviso: AceptarAvisoDePrivacidadUseCase
     @Inject lateinit var consultarAviso: ConsultarAvisoAceptadoUseCase
     @Inject lateinit var rechazarAviso: RechazarAvisoDePrivacidadUseCase
+    @Inject lateinit var hayQuePedirElAvisoAlArrancar: HayQuePedirElAvisoAlArrancarUseCase
+
+    /**
+     * H-5 · Qué estados ya atendió la navegación y la sesión de «Sesión iniciada». Es un ViewModel: sobrevive a la
+     * rotación, así que los `LaunchedEffect` de la composición nueva no repiten lo que ya hizo la anterior.
+     * H-6 · También anota si llegó un enlace del correo, para que el arranque no pida el aviso.
+     */
+    private val eventos: EventosDeCuenta by viewModels()
 
     /** Enlace de verificación pendiente de procesar. Solo en memoria. */
     private val enlaces = MutableStateFlow<String?>(null)
@@ -117,7 +126,10 @@ class MainActivity : ComponentActivity() {
     /** Solo `rugbyapp://auth-callback…` va a ConfirmarCorreoUseCase (ADR 0008). */
     private fun recibir(intent: Intent?) {
         val enlace = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.dataString ?: return
-        if (RepositorioDeRegistroSupabase.esEnlaceDeVerificacion(enlace)) enlaces.value = enlace
+        if (RepositorioDeRegistroSupabase.esEnlaceDeVerificacion(enlace)) {
+            eventos.llegoUnEnlace = true // H-6: antes de procesarlo, para que el arranque no pida el aviso
+            enlaces.value = enlace
+        }
     }
 
     @Composable
@@ -125,7 +137,6 @@ class MainActivity : ComponentActivity() {
         val navController = rememberNavController()
         // Al rechazar el aviso se crea otro RegistroViewModel: lo marcado en memoria se olvida (CA-9, AT-17).
         var generacion by rememberSaveable { mutableIntStateOf(0) }
-        var sesionActivada by remember { mutableStateOf<Sesion?>(null) }
 
         val registro: RegistroViewModel = viewModel(
             key = "registro-$generacion",
@@ -157,13 +168,26 @@ class MainActivity : ComponentActivity() {
             if (aviso.hayQuePedirlo(siFalla = true)) {
                 mostrarAviso()
             } else if (desdeRegistro) {
-                sesionActivada = sesion
+                eventos.sesionActivada = sesion
                 navController.irA(RUTA_ACTIVADA)
             }
         }
 
+        // H-5 · Cada estado se atiende una sola vez: se revisa al empezar y se marca al terminar, así una rotación que
+        // interrumpe la atención la deja pendiente para la composición nueva.
+        suspend fun atenderUnaVez(fuente: String, estado: Any, bloque: suspend () -> Unit) {
+            if (!eventos.pendiente(fuente, estado)) return
+            bloque()
+            eventos.atendido(fuente, estado)
+        }
+
         // App cerrada sin decidir o cuenta de SP-04 sin aviso: se vuelve a pedir. Sin red no se bloquea (§3.6, CP-164d).
-        LaunchedEffect(Unit) { if (aviso.hayQuePedirlo(siFalla = false)) mostrarAviso() }
+        // H-6 · Si llegó un enlace del correo, no se pide aquí: lo consulta el flujo del enlace (CP-164e).
+        LaunchedEffect(Unit) {
+            atenderUnaVez(EventosDeCuenta.ARRANQUE, Unit) {
+                if (hayQuePedirElAvisoAlArrancar.ejecutar(llegoUnEnlace = { eventos.llegoUnEnlace })) mostrarAviso()
+            }
+        }
 
         val enlace by enlaces.collectAsState()
         LaunchedEffect(enlace) {
@@ -175,35 +199,44 @@ class MainActivity : ComponentActivity() {
 
         val estadoDeRegistro by registro.estado.collectAsState()
         LaunchedEffect(estadoDeRegistro) {
-            when (val actual = estadoDeRegistro) {
-                is EstadoDeRegistro.EnlaceEnviado -> withContext(Dispatchers.Main.immediate) {
-                    if (navController.currentDestination?.route != RUTA_VERIFICA) navController.navigate(RUTA_VERIFICA)
+            val actual = estadoDeRegistro
+            atenderUnaVez(EventosDeCuenta.REGISTRO, actual) {
+                when (actual) {
+                    is EstadoDeRegistro.EnlaceEnviado -> withContext(Dispatchers.Main.immediate) {
+                        if (navController.currentDestination?.route != RUTA_VERIFICA) navController.navigate(RUTA_VERIFICA)
+                    }
+                    is EstadoDeRegistro.SesionIniciada -> trasIniciarSesion(actual.sesion, desdeRegistro = true)
+                    else -> Unit
                 }
-                is EstadoDeRegistro.SesionIniciada -> trasIniciarSesion(actual.sesion, desdeRegistro = true)
-                else -> Unit
             }
         }
 
         val estadoDeAcceso by acceso.estado.collectAsState()
         LaunchedEffect(estadoDeAcceso) {
-            (estadoDeAcceso as? EstadoDeAcceso.ConSesion)?.let { trasIniciarSesion(it.sesion, desdeRegistro = false) }
+            val actual = estadoDeAcceso
+            atenderUnaVez(EventosDeCuenta.ACCESO, actual) {
+                (actual as? EstadoDeAcceso.ConSesion)?.let { trasIniciarSesion(it.sesion, desdeRegistro = false) }
+            }
         }
 
         val estadoDelAviso by aviso.estado.collectAsState()
         LaunchedEffect(estadoDelAviso) {
-            when (estadoDelAviso) {
-                EstadoDelAviso.Aceptado -> {
-                    sesionActivada = obtenerSesionActual.ejecutar()
-                    navController.irA(RUTA_ACTIVADA)
+            val actual = estadoDelAviso
+            atenderUnaVez(EventosDeCuenta.AVISO, actual) {
+                when (actual) {
+                    EstadoDelAviso.Aceptado -> {
+                        eventos.sesionActivada = obtenerSesionActual.ejecutar()
+                        navController.irA(RUTA_ACTIVADA)
+                    }
+                    EstadoDelAviso.Rechazado -> {
+                        // CA-9: sesión cerrada y nada guardado (o revocación registrada, H-6). Se vuelve a Bienvenida.
+                        generacion++
+                        aviso.reiniciar()
+                        acceso.cargar()
+                        navController.irA(RUTA_BIENVENIDA)
+                    }
+                    else -> Unit
                 }
-                EstadoDelAviso.Rechazado -> {
-                    // CA-9: sesión cerrada y nada guardado. Se vuelve a Bienvenida.
-                    generacion++
-                    aviso.reiniciar()
-                    acceso.cargar()
-                    navController.irA(RUTA_BIENVENIDA)
-                }
-                else -> Unit
             }
         }
 
@@ -237,7 +270,7 @@ class MainActivity : ComponentActivity() {
             composable(RUTA_ACCESO) { AccesoScreen(acceso) }
             composable(RUTA_AVISO) { AvisoDePrivacidadScreen(aviso, urlDelAviso = BuildConfig.AVISO_DE_PRIVACIDAD_URL) }
             composable(RUTA_ACTIVADA) {
-                sesionActivada?.let { CuentaActivadaScreen(it, crearMiPerfil = { navController.navigate(RUTA_PROXIMAMENTE) }) }
+                eventos.sesionActivada?.let { CuentaActivadaScreen(it, crearMiPerfil = { navController.navigate(RUTA_PROXIMAMENTE) }) }
             }
             composable(RUTA_PROXIMAMENTE) { ProximamenteScreen() } // C-03 (P-10)
         }
