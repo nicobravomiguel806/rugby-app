@@ -52,7 +52,7 @@ final class ContenedorDeDependencias {
         )
         avisoViewModel = AvisoDePrivacidadViewModel(
             aceptar: AceptarAvisoDePrivacidadUseCase(repositorio: repositorioDeConsentimiento),
-            rechazar: RechazarAvisoDePrivacidadUseCase(cerrarSesion: CerrarSesionUseCase(repositorio: repositorioDeSesion)),
+            rechazar: RechazarAvisoDePrivacidadUseCase(repositorio: repositorioDeConsentimiento, cerrarSesion: CerrarSesionUseCase(repositorio: repositorioDeSesion)),
             consultar: ConsultarAvisoAceptadoUseCase(repositorio: repositorioDeConsentimiento),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: repositorioDeSesion)
         )
@@ -77,6 +77,14 @@ final class ContenedorDeDependencias {
 
     var obtenerSesionActual: ObtenerSesionActualUseCase {
         ObtenerSesionActualUseCase(repositorio: repositorioDeSesion)
+    }
+
+    /// C-01 · H-6: al arrancar no se pide el aviso si llegó un enlace del correo (lo consulta el flujo del enlace).
+    var hayQuePedirElAvisoAlArrancar: HayQuePedirElAvisoAlArrancarUseCase {
+        HayQuePedirElAvisoAlArrancarUseCase(
+            obtenerSesionActual: obtenerSesionActual,
+            consultar: ConsultarAvisoAceptadoUseCase(repositorio: repositorioDeConsentimiento)
+        )
     }
 
     /// C-01 · Uno nuevo cada vez que se empieza un registro: lo marcado vive solo en memoria (AT-17) y se olvida al

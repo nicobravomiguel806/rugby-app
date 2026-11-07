@@ -5,6 +5,10 @@
 public protocol RepositorioDeConsentimiento: Sendable {
     /// Registra la aceptación del aviso y la decisión de cada finalidad secundaria (las no incluidas = negadas).
     func aceptarAviso(version: String, finalidades: Set<FinalidadSecundaria>) async throws
-    /// Si el usuario de la sesión ya aceptó esa versión del aviso.
+    /// Si el usuario de la sesión tiene aceptada esa versión del aviso. Respeta la revocación: el aviso vigente es su
+    /// registro más reciente (H-6).
     func avisoAceptado(version: String) async throws -> Bool
+    /// Registra la revocación de esa versión del aviso como un registro nuevo (`granted = false`); los consentimientos
+    /// no se editan (H-6). Si no estaba aceptado, el servidor no guarda nada.
+    func revocarAviso(version: String) async throws
 }

@@ -4,12 +4,9 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.exceptions.HttpRequestException
 import io.github.jan.supabase.exceptions.RestException
-import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Columns
 import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -23,7 +20,9 @@ import mx.rugbyapp.domain.cuentas.RepositorioDeConsentimiento
  *
  * - aceptarAviso: RPC `aceptar_aviso_de_privacidad(p_version, p_finalidades)`. Nunca envía `user_id`, `accepted_at`
  *   ni `signup_method`: los pone el servidor (auth.uid(), now() y el JWT).
- * - avisoAceptado: `select id from privacy_consents where kind = 'aviso' and notice_version = $1 limit 1` (RLS: solo las suyas).
+ * - avisoAceptado: RPC `aviso_de_privacidad_aceptado(p_version)`. El servidor resuelve el aviso vigente (su fila más
+ *   reciente), así que respeta una revocación (H-6). RLS: solo las suyas.
+ * - revocarAviso: RPC `revocar_aviso_de_privacidad(p_version)`: fila nueva del aviso con `granted = false` (H-6).
  * Va con el access token del usuario: Postgrest está instalado en el mismo cliente que Auth.
  */
 class RepositorioDeConsentimientoSupabase(private val cliente: ClienteSupabase) : RepositorioDeConsentimiento {
@@ -43,14 +42,13 @@ class RepositorioDeConsentimientoSupabase(private val cliente: ClienteSupabase) 
     override suspend fun avisoAceptado(version: String): Boolean {
         val supabase = conSesion()
         return ejecutar {
-            supabase.from("privacy_consents").select(Columns.list("id")) {
-                filter {
-                    eq("kind", "aviso")
-                    eq("notice_version", version)
-                }
-                limit(1)
-            }.decodeList<JsonObject>().isNotEmpty()
+            supabase.postgrest.rpc("aviso_de_privacidad_aceptado", buildJsonObject { put("p_version", version) }).decodeAs<Boolean>()
         }
+    }
+
+    override suspend fun revocarAviso(version: String) {
+        val supabase = conSesion()
+        ejecutar { supabase.postgrest.rpc("revocar_aviso_de_privacidad", buildJsonObject { put("p_version", version) }) }
     }
 
     /** Sin sesión no se llama a la red: la RPC exige auth.uid() (y Postgrest mandaría la llave anon como token). */

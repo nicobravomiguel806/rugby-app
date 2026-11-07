@@ -13,6 +13,7 @@ import mx.rugbyapp.domain.cuentas.ConfirmarCorreoUseCase
 import mx.rugbyapp.domain.cuentas.ConsultarAvisoAceptadoUseCase
 import mx.rugbyapp.domain.cuentas.GeneradorDeNonce
 import mx.rugbyapp.domain.cuentas.HashDeNonce
+import mx.rugbyapp.domain.cuentas.HayQuePedirElAvisoAlArrancarUseCase
 import mx.rugbyapp.domain.cuentas.IniciarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ObtenerSesionActualUseCase
 import mx.rugbyapp.domain.cuentas.RechazarAvisoDePrivacidadUseCase
@@ -68,6 +69,15 @@ object ModuloDeCasosDeUso {
     @Provides
     fun consultarAviso(repositorio: RepositorioDeConsentimiento): ConsultarAvisoAceptadoUseCase = ConsultarAvisoAceptadoUseCase(repositorio)
 
+    // H-6 · Con consentimiento previo, «No acepto» registra la revocación antes de cerrar la sesión.
     @Provides
-    fun rechazarAviso(cerrarSesion: CerrarSesionUseCase): RechazarAvisoDePrivacidadUseCase = RechazarAvisoDePrivacidadUseCase(cerrarSesion)
+    fun rechazarAviso(repositorio: RepositorioDeConsentimiento, cerrarSesion: CerrarSesionUseCase): RechazarAvisoDePrivacidadUseCase =
+        RechazarAvisoDePrivacidadUseCase(repositorio, cerrarSesion)
+
+    // H-6 · Al arrancar no se pide el aviso si llegó un enlace del correo: lo consulta el flujo del enlace.
+    @Provides
+    fun hayQuePedirElAvisoAlArrancar(
+        obtenerSesionActual: ObtenerSesionActualUseCase,
+        consultar: ConsultarAvisoAceptadoUseCase,
+    ): HayQuePedirElAvisoAlArrancarUseCase = HayQuePedirElAvisoAlArrancarUseCase(obtenerSesionActual, consultar)
 }

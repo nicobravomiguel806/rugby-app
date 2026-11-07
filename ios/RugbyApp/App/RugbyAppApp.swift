@@ -27,6 +27,7 @@ struct RugbyAppApp: App {
                 .onOpenURL { url in
                     // C-01 · ADR 0008: el enlace del correo va a ConfirmarCorreoUseCase; lo demás es el regreso de Google.
                     if RepositorioDeRegistroSupabase.esEnlaceDeVerificacion(url) {
+                        navegacion.anotarEnlace() // H-6: antes de la tarea, para que alArrancar no pida el aviso
                         Task { await navegacion.recibirEnlace(url.absoluteString) }
                     } else {
                         _ = GIDSignIn.sharedInstance.handle(url)

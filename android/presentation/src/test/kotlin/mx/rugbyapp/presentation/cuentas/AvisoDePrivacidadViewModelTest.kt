@@ -34,7 +34,7 @@ class AvisoDePrivacidadViewModelTest {
 
     private fun viewModel(consentimiento: ConsentimientoFalso, sesiones: SesionFalsa) = AvisoDePrivacidadViewModel(
         AceptarAvisoDePrivacidadUseCase(consentimiento),
-        RechazarAvisoDePrivacidadUseCase(CerrarSesionUseCase(sesiones)),
+        RechazarAvisoDePrivacidadUseCase(consentimiento, CerrarSesionUseCase(sesiones)),
         ConsultarAvisoAceptadoUseCase(consentimiento),
         ObtenerSesionActualUseCase(sesiones),
     )
@@ -94,6 +94,29 @@ class AvisoDePrivacidadViewModelTest {
 
         assertEquals(EstadoDelAviso.ErrorAlCerrarSesion, vm.estado.value)
         assertNotNull(sesiones.guardada)
+    }
+
+    @Test fun `CP-164f no acepto con consentimiento previo revoca y pasa a rechazado`() {
+        val consentimiento = ConsentimientoFalso().apply { aceptado = true }
+        val sesiones = SesionFalsa(sesion)
+        val vm = viewModel(consentimiento, sesiones)
+
+        vm.rechazar()
+
+        assertEquals(EstadoDelAviso.Rechazado, vm.estado.value)
+        assertEquals(1, consentimiento.revocaciones)
+        assertNull(sesiones.guardada)
+    }
+
+    @Test fun `CP-164g si la revocacion falla la sesion se cierra y sale del aviso`() {
+        val consentimiento = ConsentimientoFalso().apply { aceptado = true; errorAlRevocar = ErrorDeConsentimiento.SinConexion }
+        val sesiones = SesionFalsa(sesion)
+        val vm = viewModel(consentimiento, sesiones)
+
+        vm.rechazar()
+
+        assertEquals("la sesion ya se cerro: no se deja a la persona en el aviso", EstadoDelAviso.Rechazado, vm.estado.value)
+        assertNull(sesiones.guardada)
     }
 
     @Test fun `CP-164d con sesion y sin aviso hay que pedirlo`() = runTest {

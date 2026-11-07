@@ -11,7 +11,7 @@ final class AvisoDePrivacidadViewModelTests: XCTestCase {
     private func viewModel(_ consentimiento: ConsentimientoFalso, _ sesiones: SesionFalsa) -> AvisoDePrivacidadViewModel {
         AvisoDePrivacidadViewModel(
             aceptar: AceptarAvisoDePrivacidadUseCase(repositorio: consentimiento),
-            rechazar: RechazarAvisoDePrivacidadUseCase(cerrarSesion: CerrarSesionUseCase(repositorio: sesiones)),
+            rechazar: RechazarAvisoDePrivacidadUseCase(repositorio: consentimiento, cerrarSesion: CerrarSesionUseCase(repositorio: sesiones)),
             consultar: ConsultarAvisoAceptadoUseCase(repositorio: consentimiento),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: sesiones)
         )
@@ -73,6 +73,32 @@ final class AvisoDePrivacidadViewModelTests: XCTestCase {
 
         XCTAssertEqual(vm.estado, .errorAlCerrarSesion)
         XCTAssertNotNil(sesiones.guardada)
+    }
+
+    func test_CP164f_noAceptoConConsentimientoPrevioRevocaYPasaARechazado() async {
+        let consentimiento = ConsentimientoFalso()
+        consentimiento.aceptado = true
+        let sesiones = SesionFalsa(guardada: sesion)
+        let vm = viewModel(consentimiento, sesiones)
+
+        await vm.rechazar()
+
+        XCTAssertEqual(vm.estado, .rechazado)
+        XCTAssertEqual(consentimiento.revocaciones, 1)
+        XCTAssertNil(sesiones.guardada)
+    }
+
+    func test_CP164g_siLaRevocacionFallaLaSesionSeCierraYSaleDelAviso() async {
+        let consentimiento = ConsentimientoFalso()
+        consentimiento.aceptado = true
+        consentimiento.errorAlRevocar = .sinConexion
+        let sesiones = SesionFalsa(guardada: sesion)
+        let vm = viewModel(consentimiento, sesiones)
+
+        await vm.rechazar()
+
+        XCTAssertEqual(vm.estado, .rechazado, "la sesión ya se cerró: no se deja a la persona en el aviso")
+        XCTAssertNil(sesiones.guardada)
     }
 
     func test_CP164d_conSesionYSinAvisoHayQuePedirlo() async {

@@ -6,7 +6,8 @@ public enum EstadoDelAviso: Equatable, Sendable {
     case pendiente
     case enviando
     case aceptado
-    /// «No acepto»: la sesión se cerró y no se guardó nada (CA-9). La App vuelve a Bienvenida.
+    /// «No acepto»: la sesión se cerró y no se guardó nada; si había consentimiento previo, se registró su revocación
+    /// o, si no se pudo, la sesión se cerró igual (CA-9, H-6). La App vuelve a Bienvenida.
     case rechazado
     case error(ErrorDeConsentimiento)
     /// No se pudo borrar la sesión local al rechazar: se queda en la pantalla y se puede reintentar (CP-164c).
@@ -78,6 +79,11 @@ public final class AvisoDePrivacidadViewModel {
         estado = .enviando
         do {
             try await rechazarUseCase.ejecutar()
+            aceptoAvisoDePrivacidad = false
+            finalidades = []
+            estado = .rechazado
+        } catch is ErrorDeConsentimiento {
+            // CP-164g: la revocación no se registró, pero la sesión local ya se cerró. Se sale del aviso igual.
             aceptoAvisoDePrivacidad = false
             finalidades = []
             estado = .rechazado

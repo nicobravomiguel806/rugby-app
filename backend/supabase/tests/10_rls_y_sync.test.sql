@@ -192,3 +192,6 @@ reset role;
 
 -- C-01 · Pruebas del agente de seguridad (ronda 1): bypasses de AT-18 (a) y de privacy_consents. Mismo motivo que arriba.
 \ir 40_seguridad_registro.test.sql
+
+-- C-01 · H-6 (ronda 1 de corrección): revocación del aviso como fila nueva. Mismo motivo que arriba.
+\ir 50_revocacion_aviso.test.sql

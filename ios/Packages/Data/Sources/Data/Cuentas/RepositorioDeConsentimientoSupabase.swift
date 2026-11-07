@@ -2,7 +2,9 @@
 //
 // - aceptarAviso: RPC `aceptar_aviso_de_privacidad(p_version, p_finalidades)`. Nunca envía `user_id`, `accepted_at`
 //   ni `signup_method`: los pone el servidor (auth.uid(), now() y el JWT).
-// - avisoAceptado: `select id from privacy_consents where kind = 'aviso' and notice_version = $1 limit 1` (RLS: solo las suyas).
+// - avisoAceptado: RPC `aviso_de_privacidad_aceptado(p_version)`. El servidor resuelve el aviso vigente (su fila más
+//   reciente), así que respeta una revocación (H-6). RLS: solo las suyas.
+// - revocarAviso: RPC `revocar_aviso_de_privacidad(p_version)`: fila nueva del aviso con `granted = false` (H-6).
 // Va con el access token del usuario, tomado del cliente compartido.
 import Foundation
 import Auth
@@ -27,7 +29,10 @@ public final class RepositorioDeConsentimientoSupabase: RepositorioDeConsentimie
         }
     }
 
-    private struct Fila: Decodable { let id: String }
+    private struct ParametrosDeVersion: Encodable, Sendable {
+        let version: String
+        enum CodingKeys: String, CodingKey { case version = "p_version" }
+    }
 
     public func aceptarAviso(version: String, finalidades: Set<FinalidadSecundaria>) async throws {
         let rest = try await restConSesion()
@@ -43,14 +48,19 @@ public final class RepositorioDeConsentimientoSupabase: RepositorioDeConsentimie
     public func avisoAceptado(version: String) async throws -> Bool {
         let rest = try await restConSesion()
         do {
-            let filas: [Fila] = try await rest.from("privacy_consents")
-                .select("id")
-                .eq("kind", value: "aviso")
-                .eq("notice_version", value: version)
-                .limit(1)
+            let aceptado: Bool = try await rest.rpc("aviso_de_privacidad_aceptado", params: ParametrosDeVersion(version: version))
                 .execute()
                 .value
-            return !filas.isEmpty
+            return aceptado
+        } catch {
+            throw Self.traducir(error)
+        }
+    }
+
+    public func revocarAviso(version: String) async throws {
+        let rest = try await restConSesion()
+        do {
+            try await rest.rpc("revocar_aviso_de_privacidad", params: ParametrosDeVersion(version: version)).execute()
         } catch {
             throw Self.traducir(error)
         }

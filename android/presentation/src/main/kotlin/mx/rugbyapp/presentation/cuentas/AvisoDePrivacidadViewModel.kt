@@ -20,7 +20,10 @@ sealed interface EstadoDelAviso {
     data object Pendiente : EstadoDelAviso
     data object Enviando : EstadoDelAviso
     data object Aceptado : EstadoDelAviso
-    /** «No acepto»: la sesión se cerró y no se guardó nada (CA-9). La App vuelve a Bienvenida. */
+    /**
+     * «No acepto»: la sesión se cerró y no se guardó nada; si había consentimiento previo, se registró su revocación o,
+     * si no se pudo, la sesión se cerró igual (CA-9, H-6). La App vuelve a Bienvenida.
+     */
     data object Rechazado : EstadoDelAviso
     data class Error(val error: ErrorDeConsentimiento) : EstadoDelAviso
     /** No se pudo borrar la sesión local al rechazar: se queda en la pantalla y se puede reintentar (CP-164c). */
@@ -95,6 +98,11 @@ class AvisoDePrivacidadViewModel(
                 EstadoDelAviso.Rechazado
             } catch (e: CancellationException) {
                 throw e
+            } catch (_: ErrorDeConsentimiento) {
+                // CP-164g: la revocación no se registró, pero la sesión local ya se cerró. Se sale del aviso igual.
+                _aceptoAviso.value = false
+                _finalidades.value = emptySet()
+                EstadoDelAviso.Rechazado
             } catch (_: Exception) {
                 EstadoDelAviso.ErrorAlCerrarSesion
             }

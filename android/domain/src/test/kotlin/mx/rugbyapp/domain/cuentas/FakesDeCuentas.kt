@@ -97,13 +97,27 @@ class RepositorioDeRegistroFalso : RepositorioDeRegistro {
     }
 }
 
-class RepositorioDeConsentimientoFalso(aceptadas: Set<String> = emptySet()) : RepositorioDeConsentimiento {
+class RepositorioDeConsentimientoFalso(
+    aceptadas: Set<String> = emptySet(),
+    private val bitacora: Bitacora? = null,
+) : RepositorioDeConsentimiento {
     var errorAlAceptar: ErrorDeConsentimiento? = null
     var errorAlConsultar: ErrorDeConsentimiento? = null
-    /** Versiones del aviso que el "servidor" tiene aceptadas. */
+    var errorAlRevocar: ErrorDeConsentimiento? = null
+    /** H-6 · Se ejecuta durante la consulta, antes de responder (p. ej., llega el enlace del correo a media consulta). */
+    var alConsultar: (() -> Unit)? = null
+    /** Versiones del aviso que el "servidor" tiene aceptadas (estado vigente). */
     val aceptadas = aceptadas.toMutableSet()
     val llamadasAAceptar = mutableListOf<Pair<String, Set<FinalidadSecundaria>>>()
     val versionesConsultadas = mutableListOf<String>()
+    val revocaciones = mutableListOf<String>()
+
+    override suspend fun revocarAviso(version: String) {
+        bitacora?.anotar("revocarAviso")
+        revocaciones += version
+        errorAlRevocar?.let { throw it }
+        aceptadas -= version
+    }
 
     override suspend fun aceptarAviso(version: String, finalidades: Set<FinalidadSecundaria>) {
         llamadasAAceptar += version to finalidades
@@ -112,7 +126,9 @@ class RepositorioDeConsentimientoFalso(aceptadas: Set<String> = emptySet()) : Re
     }
 
     override suspend fun avisoAceptado(version: String): Boolean {
+        bitacora?.anotar("avisoAceptado")
         versionesConsultadas += version
+        alConsultar?.invoke()
         errorAlConsultar?.let { throw it }
         return version in aceptadas
     }

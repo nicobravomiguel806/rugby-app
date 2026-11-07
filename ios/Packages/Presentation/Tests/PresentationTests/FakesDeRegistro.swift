@@ -40,6 +40,13 @@ final class ConsentimientoFalso: RepositorioDeConsentimiento, @unchecked Sendabl
         if let errorAlConsultar { throw errorAlConsultar }
         return aceptado
     }
+    var errorAlRevocar: ErrorDeConsentimiento?
+    private(set) var revocaciones = 0
+    func revocarAviso(version: String) async throws {
+        revocaciones += 1
+        if let errorAlRevocar { throw errorAlRevocar }
+        aceptado = false
+    }
 }
 
 final class SesionFalsa: RepositorioDeSesion, @unchecked Sendable {

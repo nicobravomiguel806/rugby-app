@@ -82,25 +82,39 @@ class RepositorioDeConsentimientoSupabaseTest {
     @Test fun `CP-114c aviso aceptado consulta la version en privacy consents`() = runTest {
         val servidor = ServidorFalsoDePrueba()
         val repo = RepositorioDeConsentimientoSupabase(clienteConSesion(servidor))
-        servidor.responder = { respond("""[{"id":"0b5c0000-0000-0000-0000-000000000001"}]""", HttpStatusCode.OK, json) }
+        servidor.responder = { respond("true", HttpStatusCode.OK, json) }
 
         assertTrue(repo.avisoAceptado("v0-borrador"))
 
-        val (pedido, _) = servidor.pedidos.last()
-        assertEquals("GET", pedido.method.value)
-        assertEquals("/rest/v1/privacy_consents", pedido.url.encodedPath)
-        assertEquals("eq.aviso", pedido.url.parameters["kind"])
-        assertEquals("eq.v0-borrador", pedido.url.parameters["notice_version"])
-        assertEquals("1", pedido.url.parameters["limit"])
+        // H-6: la consulta la resuelve el servidor (fila más reciente del aviso, respeta la revocación).
+        val (pedido, texto) = servidor.pedidos.last()
+        assertEquals("POST", pedido.method.value)
+        assertEquals("/rest/v1/rpc/aviso_de_privacidad_aceptado", pedido.url.encodedPath)
+        assertEquals(setOf("p_version"), cuerpo(texto).keys)
+        assertEquals("v0-borrador", cuerpo(texto)["p_version"]?.jsonPrimitive?.content)
         assertEquals("Bearer at-123", pedido.headers[HttpHeaders.Authorization])
     }
 
     @Test fun `CP-164d sin fila del aviso da false`() = runTest {
         val servidor = ServidorFalsoDePrueba()
         val repo = RepositorioDeConsentimientoSupabase(clienteConSesion(servidor))
-        servidor.responder = { respond("[]", HttpStatusCode.OK, json) }
+        servidor.responder = { respond("false", HttpStatusCode.OK, json) }
 
         assertFalse(repo.avisoAceptado("v0-borrador"))
+    }
+
+    @Test fun `CP-164f revocar llama a la RPC con el token del usuario y solo la version`() = runTest {
+        val servidor = ServidorFalsoDePrueba()
+        val repo = RepositorioDeConsentimientoSupabase(clienteConSesion(servidor))
+        servidor.responder = { respond("true", HttpStatusCode.OK, json) }
+
+        repo.revocarAviso("v0-borrador")
+
+        val (pedido, texto) = servidor.pedidos.last()
+        assertEquals("POST", pedido.method.value)
+        assertEquals("/rest/v1/rpc/revocar_aviso_de_privacidad", pedido.url.encodedPath)
+        assertEquals("Bearer at-123", pedido.headers[HttpHeaders.Authorization])
+        assertEquals("sin user_id, accepted_at, signup_method ni granted", setOf("p_version"), cuerpo(texto).keys)
     }
 
     @Test fun `sin sesion no usa la red`() = runTest {
@@ -109,6 +123,7 @@ class RepositorioDeConsentimientoSupabaseTest {
 
         esperarError(ErrorDeConsentimiento.SinSesion) { repo.aceptarAviso("v0-borrador", emptySet()) }
         esperarError(ErrorDeConsentimiento.SinSesion) { repo.avisoAceptado("v0-borrador") }
+        esperarError(ErrorDeConsentimiento.SinSesion) { repo.revocarAviso("v0-borrador") }
         assertTrue(servidor.pedidos.isEmpty())
     }
 
@@ -118,5 +133,6 @@ class RepositorioDeConsentimientoSupabaseTest {
         servidor.responder = { throw IOException("sin red") }
 
         esperarError(ErrorDeConsentimiento.SinConexion) { repo.avisoAceptado("v0-borrador") }
+        esperarError(ErrorDeConsentimiento.SinConexion) { repo.revocarAviso("v0-borrador") }
     }
 }

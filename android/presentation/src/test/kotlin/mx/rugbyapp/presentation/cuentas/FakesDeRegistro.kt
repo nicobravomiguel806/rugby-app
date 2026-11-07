@@ -46,6 +46,9 @@ class ConsentimientoFalso : RepositorioDeConsentimiento {
         aceptado = true
     }
     override suspend fun avisoAceptado(version: String): Boolean { errorAlConsultar?.let { throw it }; return aceptado }
+    var errorAlRevocar: ErrorDeConsentimiento? = null
+    var revocaciones = 0
+    override suspend fun revocarAviso(version: String) { revocaciones++; errorAlRevocar?.let { throw it }; aceptado = false }
 }
 
 class SesionFalsa(var guardada: Sesion? = null) : RepositorioDeSesion {

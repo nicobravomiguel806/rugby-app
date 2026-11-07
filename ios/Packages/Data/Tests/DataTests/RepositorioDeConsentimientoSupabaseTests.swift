@@ -66,28 +66,42 @@ final class RepositorioDeConsentimientoSupabaseTests: XCTestCase {
     func test_CP114c_avisoAceptadoConsultaLaVersionEnPrivacyConsents() async throws {
         let servidor = ServidorFalsoDePrueba()
         let repo = RepositorioDeConsentimientoSupabase(cliente: try await clienteConSesion(servidor))
-        servidor.responder = { _ in (200, Data(#"[{"id":"0b5c0000-0000-0000-0000-000000000001"}]"#.utf8)) }
+        servidor.responder = { _ in (200, Data("true".utf8)) }
 
         let aceptado = try await repo.avisoAceptado(version: "v0-borrador")
 
         XCTAssertTrue(aceptado)
+        // H-6: la consulta la resuelve el servidor (fila más reciente del aviso, respeta la revocación).
         let pedido = try XCTUnwrap(servidor.pedidos.last)
-        XCTAssertEqual(pedido.httpMethod, "GET")
-        XCTAssertEqual(pedido.url?.path, "/rest/v1/privacy_consents")
-        XCTAssertEqual(R.query(pedido, "kind"), "eq.aviso")
-        XCTAssertEqual(R.query(pedido, "notice_version"), "eq.v0-borrador")
-        XCTAssertEqual(R.query(pedido, "limit"), "1")
+        XCTAssertEqual(pedido.httpMethod, "POST")
+        XCTAssertEqual(pedido.url?.path, "/rest/v1/rpc/aviso_de_privacidad_aceptado")
+        XCTAssertEqual(Set(R.cuerpo(pedido).keys), ["p_version"])
+        XCTAssertEqual(R.cuerpo(pedido)["p_version"] as? String, "v0-borrador")
         XCTAssertEqual(pedido.value(forHTTPHeaderField: "Authorization"), "Bearer at-123")
     }
 
     func test_CP164d_sinFilaDelAvisoDaFalse() async throws {
         let servidor = ServidorFalsoDePrueba()
         let repo = RepositorioDeConsentimientoSupabase(cliente: try await clienteConSesion(servidor))
-        servidor.responder = { _ in (200, Data("[]".utf8)) }
+        servidor.responder = { _ in (200, Data("false".utf8)) }
 
         let aceptado = try await repo.avisoAceptado(version: "v0-borrador")
 
         XCTAssertFalse(aceptado)
+    }
+
+    func test_CP164f_revocarLlamaALaRPCConElTokenDelUsuarioYSoloLaVersion() async throws {
+        let servidor = ServidorFalsoDePrueba()
+        let repo = RepositorioDeConsentimientoSupabase(cliente: try await clienteConSesion(servidor))
+        servidor.responder = { _ in (200, Data("true".utf8)) }
+
+        try await repo.revocarAviso(version: "v0-borrador")
+
+        let pedido = try XCTUnwrap(servidor.pedidos.last)
+        XCTAssertEqual(pedido.httpMethod, "POST")
+        XCTAssertEqual(pedido.url?.path, "/rest/v1/rpc/revocar_aviso_de_privacidad")
+        XCTAssertEqual(pedido.value(forHTTPHeaderField: "Authorization"), "Bearer at-123")
+        XCTAssertEqual(Set(R.cuerpo(pedido).keys), ["p_version"], "sin user_id, accepted_at, signup_method ni granted")
     }
 
     func test_sinSesionNoUsaLaRed() async {
@@ -97,6 +111,7 @@ final class RepositorioDeConsentimientoSupabaseTests: XCTestCase {
 
         await esperarError(.sinSesion) { try await repo.aceptarAviso(version: "v0-borrador", finalidades: []) }
         await esperarError(.sinSesion) { _ = try await repo.avisoAceptado(version: "v0-borrador") }
+        await esperarError(.sinSesion) { try await repo.revocarAviso(version: "v0-borrador") }
         XCTAssertTrue(servidor.pedidos.isEmpty)
     }
 
@@ -106,5 +121,6 @@ final class RepositorioDeConsentimientoSupabaseTests: XCTestCase {
         servidor.responder = { _ in throw URLError(.notConnectedToInternet) }
 
         await esperarError(.sinConexion) { _ = try await repo.avisoAceptado(version: "v0-borrador") }
+        await esperarError(.sinConexion) { try await repo.revocarAviso(version: "v0-borrador") }
     }
 }

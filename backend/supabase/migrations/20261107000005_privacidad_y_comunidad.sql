@@ -5,6 +5,8 @@
 -- 2) `privacy_consents`: evidencia del consentimiento, una fila por decisión. El servidor pone el usuario, la fecha y
 --    el método de alta (desde el JWT firmado); de solo inserción.
 -- 3) RPC `aceptar_aviso_de_privacidad`: aviso + una fila por finalidad, idempotente, `security invoker` (RLS aplica).
+--    H-6 (ronda 1 de corrección): `revocar_aviso_de_privacidad` (revocación = fila nueva del aviso con
+--    `granted = false`) y `aviso_de_privacidad_aceptado` (el aviso vigente es su fila más reciente).
 -- 4) Trigger `perfiles_comunidad_inmutable` sobre `profiles`.
 
 -- ── 1. Tipos ────────────────────────────────────────────────────────────────────
@@ -25,22 +27,40 @@ create table public.privacy_consents (
   signup_method public.metodo_de_alta not null,
   accepted_at timestamptz not null default now(),
   constraint privacy_consents_forma check (
-    (kind = 'aviso' and purpose is null and granted)
+    (kind = 'aviso' and purpose is null)
     or (kind = 'finalidad_secundaria' and purpose is not null)
   )
 );
 comment on table public.privacy_consents is
   'C-01 · Evidencia del consentimiento del Aviso de Privacidad (LFPDPPP). Solo inserción; usuario, fecha y método los pone el servidor (ADR 0009).';
 
--- Idempotencia: un aviso por versión y usuario. El estado vigente de cada finalidad es su fila más reciente.
-create unique index privacy_consents_un_aviso_por_version
-  on public.privacy_consents (user_id, notice_version) where kind = 'aviso';
+-- El estado vigente del aviso y de cada finalidad es su fila más reciente. En el aviso, `granted = false` es una
+-- revocación (H-6). El trigger de sellado obliga a que cada fila del aviso cambie el estado vigente (aceptar →
+-- revocar → aceptar…), así que no hay dos aceptaciones vigentes seguidas ni revocaciones sin aceptación previa.
 create index privacy_consents_por_usuario on public.privacy_consents (user_id, accepted_at desc);
 
 -- Versión vigente del aviso. Cambiar de versión = migración nueva + pedir aceptación otra vez (aviso §8).
 create or replace function privado.version_vigente_del_aviso() returns text
 language sql immutable set search_path = public, pg_temp as $$
   select 'v0-borrador'::text;
+$$;
+
+-- H-6 · ¿Está aceptado el aviso de esa versión para ese usuario? El estado vigente es su fila más reciente. Como las
+-- filas del aviso alternan (aceptar, revocar, aceptar…; lo exige `sellar_consentimiento`), la más reciente es una
+-- aceptación si y solo si hay más aceptaciones que revocaciones. Se cuenta en lugar de ordenar por `accepted_at`
+-- porque dos filas de la misma transacción tienen el mismo `now()`. `security invoker`: RLS deja ver solo las propias.
+create or replace function privado.aviso_vigente(p_usuario uuid, p_version text) returns boolean
+language sql stable security invoker set search_path = public, pg_temp as $$
+  select count(*) filter (where granted) > count(*) filter (where not granted)
+  from privacy_consents
+  where user_id = p_usuario and notice_version = p_version and kind = 'aviso';
+$$;
+
+-- H-6 · Serializa los cambios del aviso de un usuario y versión hasta el fin de la transacción, para que dos
+-- aceptaciones (o revocaciones) simultáneas no inserten dos filas iguales. Sustituye al índice único anterior.
+create or replace function privado.bloquear_aviso(p_usuario uuid, p_version text) returns void
+language sql volatile security invoker set search_path = public, pg_temp as $$
+  select pg_advisory_xact_lock(hashtextextended('privacy_consents/' || coalesce(p_usuario::text, '') || '/' || coalesce(p_version, ''), 0));
 $$;
 
 -- Sella la fila antes de insertar: autoría, fecha y método son del servidor; lo que mande el cliente se ignora.
@@ -64,6 +84,15 @@ begin
   end;
   if new.signup_method is null then
     raise exception 'metodo de alta no admitido: %', coalesce(proveedor, '(sin proveedor)') using errcode = '22023';
+  end if;
+  -- H-6 · Cada fila del aviso cambia el estado vigente: no se repite una aceptación vigente ni se revoca sin
+  -- aceptación previa (CA-9: sin consentimiento, «No acepto» no guarda nada). Una fila a nombre de otro usuario la
+  -- niega después la política `consentimientos_alta`.
+  if new.kind = 'aviso' and new.user_id = auth.uid() then
+    perform privado.bloquear_aviso(new.user_id, new.notice_version);
+    if new.granted is not distinct from privado.aviso_vigente(new.user_id, new.notice_version) then
+      raise exception 'aviso_sin_cambio: la fila no cambia el estado vigente del aviso' using errcode = '23505';
+    end if;
   end if;
   return new;
 end $$;
@@ -93,25 +122,24 @@ create policy consentimientos_alta on public.privacy_consents
 -- Sin políticas de update ni delete.
 
 -- ── 3. RPC aceptar_aviso_de_privacidad ──────────────────────────────────────────
--- Inserta el aviso y, solo si es nuevo, una fila por cada una de las tres finalidades con `granted` según su casilla
--- (A-1). Devuelve true si registró y false si ya existía (reintentar es seguro). Todo en una transacción.
--- `security invoker` (no definer): RLS aplica y CP-151a sigue en 0.
+-- Inserta el aviso y, solo si no estaba ya aceptado, una fila por cada una de las tres finalidades con `granted`
+-- según su casilla (A-1). Devuelve true si registró y false si ya estaba aceptado (reintentar es seguro). Tras una
+-- revocación (H-6) vuelve a registrar. Todo en una transacción. `security invoker` (no definer): RLS aplica y
+-- CP-151a sigue en 0.
 create or replace function public.aceptar_aviso_de_privacidad(
   p_version text,
   p_finalidades public.finalidad_secundaria[] default '{}'
 ) returns boolean
 language plpgsql security invoker set search_path = public, pg_temp as $$
-declare
-  aviso_id uuid;
 begin
-  insert into privacy_consents (user_id, notice_version, kind, granted)
-  values (auth.uid(), p_version, 'aviso', true)
-  on conflict (user_id, notice_version) where kind = 'aviso' do nothing
-  returning id into aviso_id;
-
-  if aviso_id is null then
+  perform privado.bloquear_aviso(auth.uid(), p_version);
+  if privado.aviso_vigente(auth.uid(), p_version) then
     return false;
   end if;
+
+  -- El trigger exige la versión vigente (version_desactualizada) y sella usuario, fecha y método.
+  insert into privacy_consents (user_id, notice_version, kind, granted)
+  values (auth.uid(), p_version, 'aviso', true);
 
   insert into privacy_consents (user_id, notice_version, kind, purpose, granted)
   select auth.uid(), p_version, 'finalidad_secundaria', f, f = any(coalesce(p_finalidades, '{}'))
@@ -119,6 +147,29 @@ begin
 
   return true;
 end $$;
+
+-- H-6 · «No acepto» con un consentimiento ya guardado: registra la revocación como fila nueva del aviso con
+-- `granted = false` (la tabla es de solo inserción). Solo para auth.uid(): no recibe usuario. Si el aviso no estaba
+-- aceptado no inserta nada y devuelve false (CA-9; reintentar es seguro). `security invoker`: RLS aplica.
+create or replace function public.revocar_aviso_de_privacidad(p_version text) returns boolean
+language plpgsql security invoker set search_path = public, pg_temp as $$
+begin
+  perform privado.bloquear_aviso(auth.uid(), p_version);
+  if not privado.aviso_vigente(auth.uid(), p_version) then
+    return false;
+  end if;
+
+  insert into privacy_consents (user_id, notice_version, kind, granted)
+  values (auth.uid(), p_version, 'aviso', false);
+
+  return true;
+end $$;
+
+-- H-6 · ¿El usuario de la sesión tiene aceptada esa versión del aviso? Respeta la revocación (fila más reciente).
+create or replace function public.aviso_de_privacidad_aceptado(p_version text) returns boolean
+language sql stable security invoker set search_path = public, pg_temp as $$
+  select privado.aviso_vigente(auth.uid(), p_version);
+$$;
 
 -- ── 4. AT-18 (a): community_id inmutable para el usuario ────────────────────────
 -- Un trigger y no `revoke update (community_id)`, porque un `grant update` de tabla completa futuro lo reabriría.
@@ -142,10 +193,18 @@ revoke all on function privado.version_vigente_del_aviso() from public, anon;
 revoke all on function privado.sellar_consentimiento() from public, anon;
 revoke all on function privado.consentimiento_inmutable() from public, anon;
 revoke all on function privado.comunidad_inmutable() from public, anon;
+revoke all on function privado.aviso_vigente(uuid, text) from public, anon;
+revoke all on function privado.bloquear_aviso(uuid, text) from public, anon;
 grant execute on function privado.version_vigente_del_aviso() to authenticated;
 grant execute on function privado.sellar_consentimiento() to authenticated;
 grant execute on function privado.consentimiento_inmutable() to authenticated;
 grant execute on function privado.comunidad_inmutable() to authenticated;
+grant execute on function privado.aviso_vigente(uuid, text) to authenticated;
+grant execute on function privado.bloquear_aviso(uuid, text) to authenticated;
 
 revoke all on function public.aceptar_aviso_de_privacidad(text, public.finalidad_secundaria[]) from public, anon;
 grant execute on function public.aceptar_aviso_de_privacidad(text, public.finalidad_secundaria[]) to authenticated;
+revoke all on function public.revocar_aviso_de_privacidad(text) from public, anon;
+grant execute on function public.revocar_aviso_de_privacidad(text) to authenticated;
+revoke all on function public.aviso_de_privacidad_aceptado(text) from public, anon;
+grant execute on function public.aviso_de_privacidad_aceptado(text) to authenticated;
