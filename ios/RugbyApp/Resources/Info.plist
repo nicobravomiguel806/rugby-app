@@ -30,6 +30,9 @@
 	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
 	<key>GIDServerClientID</key>
 	<string>$(GOOGLE_WEB_CLIENT_ID)</string>
+	<!-- C-01 · P-5: URL pública del Aviso de Privacidad. Vacía hasta que exista (ajuste AVISO_DE_PRIVACIDAD_URL de project.yml). -->
+	<key>AvisoDePrivacidadURL</key>
+	<string>$(AVISO_DE_PRIVACIDAD_URL)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -38,6 +41,15 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>$(GOOGLE_IOS_URL_SCHEME)</string>
+			</array>
+		</dict>
+		<!-- C-01 · ADR 0008: el enlace de verificación del correo vuelve por rugbyapp://auth-callback (PKCE, AT-19). -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>mx.rugbyapp.auth-callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>rugbyapp</string>
 			</array>
 		</dict>
 	</array>
