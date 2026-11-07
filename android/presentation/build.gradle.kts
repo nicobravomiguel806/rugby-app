@@ -27,6 +27,8 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.lifecycle.viewmodel.ktx)
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.activity.compose) // C-01: BackHandler de Aviso de privacidad
+    implementation(libs.browser)          // C-01: Custom Tabs para leer el aviso
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
