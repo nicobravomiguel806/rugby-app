@@ -9,7 +9,6 @@ import io.github.jan.supabase.exceptions.HttpRequestException
 import io.github.jan.supabase.exceptions.RestException
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -17,6 +16,7 @@ import io.ktor.client.request.post
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.serialization.json.JsonPrimitive
 import mx.rugbyapp.domain.cuentas.CredencialNativa
 import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
 import mx.rugbyapp.domain.cuentas.ProveedorDeIdentidad
@@ -31,18 +31,22 @@ import mx.rugbyapp.domain.cuentas.Sesion
  * - revocarSesionEnServidor: POST /auth/v1/logout?scope=local con ese token (solo este dispositivo) y lo olvida.
  * Nada de esto escribe tokens en logs (AT-10).
  */
-class RepositorioDeSesionSupabase internal constructor(
-    private val configuracion: ConfiguracionDeSupabase,
-    private val almacen: AlmacenSeguroDeSesion,
-    private val motor: HttpClientEngine?,
-    conCiclosDeVida: Boolean,
-) : RepositorioDeSesion {
+class RepositorioDeSesionSupabase(private val cliente: ClienteSupabase) : RepositorioDeSesion {
 
     constructor(configuracion: ConfiguracionDeSupabase, almacen: AlmacenSeguroDeSesion) :
-        this(configuracion, almacen, motor = null, conCiclosDeVida = true)
+        this(ClienteSupabase(configuracion, almacen))
 
-    private val supabase: SupabaseClient? = ClienteSupabase.crear(configuracion, almacen, motor, conCiclosDeVida)
-    private val http: HttpClient by lazy { motor?.let { HttpClient(it) } ?: HttpClient(OkHttp) }
+    internal constructor(
+        configuracion: ConfiguracionDeSupabase,
+        almacen: AlmacenSeguroDeSesion,
+        motor: HttpClientEngine?,
+        conCiclosDeVida: Boolean,
+    ) : this(ClienteSupabase(configuracion, almacen, motor, conCiclosDeVida))
+
+    private val configuracion = cliente.configuracion
+    private val almacen = cliente.almacen
+    private val supabase: SupabaseClient? = cliente.supabase
+    private val http: HttpClient get() = cliente.http
     private val tokenPorRevocar = AtomicReference<String?>(null)
 
     override suspend fun iniciarSesion(c: CredencialNativa, nonce: String): Sesion {
@@ -104,7 +108,13 @@ class RepositorioDeSesionSupabase internal constructor(
     }
 
     internal companion object {
-        fun sesionDe(usuario: UserInfo) = Sesion(usuarioId = usuario.id, correo = usuario.email)
+        /** C-01 · `nombre` sale de `user_metadata`: `full_name` (registro con correo, P-4) o `name` (Google). Solo para mostrar. */
+        fun sesionDe(usuario: UserInfo): Sesion {
+            val nombre = sequenceOf("full_name", "name")
+                .mapNotNull { (usuario.userMetadata?.get(it) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.trim() }
+                .firstOrNull { it.isNotEmpty() }
+            return Sesion(usuarioId = usuario.id, correo = usuario.email, nombre = nombre)
+        }
 
         fun traducir(e: Throwable): ErrorDeAutenticacion = when (e) {
             is ErrorDeAutenticacion -> e
