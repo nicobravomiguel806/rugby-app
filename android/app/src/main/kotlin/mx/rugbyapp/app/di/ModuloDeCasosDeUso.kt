@@ -7,12 +7,21 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 import mx.rugbyapp.app.BuildConfig
 import mx.rugbyapp.app.cuentas.ObtenedorDeCredencialGoogle
+import mx.rugbyapp.domain.cuentas.AceptarAvisoDePrivacidadUseCase
 import mx.rugbyapp.domain.cuentas.CerrarSesionUseCase
+import mx.rugbyapp.domain.cuentas.ConfirmarCorreoUseCase
+import mx.rugbyapp.domain.cuentas.ConsultarAvisoAceptadoUseCase
 import mx.rugbyapp.domain.cuentas.GeneradorDeNonce
 import mx.rugbyapp.domain.cuentas.HashDeNonce
 import mx.rugbyapp.domain.cuentas.IniciarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ObtenerSesionActualUseCase
+import mx.rugbyapp.domain.cuentas.RechazarAvisoDePrivacidadUseCase
+import mx.rugbyapp.domain.cuentas.ReenviarVerificacionUseCase
+import mx.rugbyapp.domain.cuentas.RegistrarUsuarioUseCase
+import mx.rugbyapp.domain.cuentas.RepositorioDeConsentimiento
+import mx.rugbyapp.domain.cuentas.RepositorioDeRegistro
 import mx.rugbyapp.domain.cuentas.RepositorioDeSesion
+import mx.rugbyapp.domain.cuentas.ValidadorDeRegistro
 import mx.rugbyapp.domain.rules.ObtenerModalidadesUseCase
 import mx.rugbyapp.domain.rules.RepositorioDeReglas
 
@@ -41,4 +50,24 @@ object ModuloDeCasosDeUso {
 
     @Provides
     fun cerrarSesion(repositorio: RepositorioDeSesion): CerrarSesionUseCase = CerrarSesionUseCase(repositorio)
+
+    // C-01 · Registro, verificación del correo y aviso de privacidad.
+    @Provides
+    fun registrarUsuario(repositorio: RepositorioDeRegistro): RegistrarUsuarioUseCase =
+        RegistrarUsuarioUseCase(ValidadorDeRegistro(), repositorio)
+
+    @Provides
+    fun reenviarVerificacion(repositorio: RepositorioDeRegistro): ReenviarVerificacionUseCase = ReenviarVerificacionUseCase(repositorio)
+
+    @Provides
+    fun confirmarCorreo(repositorio: RepositorioDeRegistro): ConfirmarCorreoUseCase = ConfirmarCorreoUseCase(repositorio)
+
+    @Provides
+    fun aceptarAviso(repositorio: RepositorioDeConsentimiento): AceptarAvisoDePrivacidadUseCase = AceptarAvisoDePrivacidadUseCase(repositorio)
+
+    @Provides
+    fun consultarAviso(repositorio: RepositorioDeConsentimiento): ConsultarAvisoAceptadoUseCase = ConsultarAvisoAceptadoUseCase(repositorio)
+
+    @Provides
+    fun rechazarAviso(cerrarSesion: CerrarSesionUseCase): RechazarAvisoDePrivacidadUseCase = RechazarAvisoDePrivacidadUseCase(cerrarSesion)
 }
