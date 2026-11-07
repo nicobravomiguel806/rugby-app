@@ -189,3 +189,6 @@ reset role;
 
 -- C-01 · privacy_consents y community_id inmutable (CP-161, CP-162). Mismo motivo: el runner solo ejecuta este archivo.
 \ir 30_registro.test.sql
+
+-- C-01 · Pruebas del agente de seguridad (ronda 1): bypasses de AT-18 (a) y de privacy_consents. Mismo motivo que arriba.
+\ir 40_seguridad_registro.test.sql
