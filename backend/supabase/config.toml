@@ -14,6 +14,9 @@ major_version = 15
 [auth]
 enabled = true
 site_url = "rugbyapp://auth-callback"
+# C-01 · ADR 0008: el enlace de verificación vuelve a la app por este esquema (PKCE). Exacta, sin comodines (AT-19).
+# En Supabase dev la misma URL va en Authentication → URL Configuration → Redirect URLs.
+additional_redirect_urls = ["rugbyapp://auth-callback"]
 enable_signup = true
 minimum_password_length = 10
 

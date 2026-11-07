@@ -102,7 +102,7 @@ reset role;
 set role authenticated;
 select tests.como('00000000-0000-0000-0000-000000000012');
 select tests.ok((select count(*) from communities where id = 'c0000000-0000-0000-0000-000000000003') = 1,
-                'SP04-4a Un usuario sin perfil sí ve las comunidades (para elegir la suya en C-01)');
+                'SP04-4a Un usuario sin perfil sí ve las comunidades (las ligas son datos deportivos de lectura nacional, P-2)');
 select tests.ok((select count(*) from teams where id = 'a0000000-0000-0000-0000-000000000003') = 1,
                 'SP04-4b Un usuario sin perfil sí ve los equipos (lectura pública)');
 select tests.como('00000000-0000-0000-0000-000000000016');

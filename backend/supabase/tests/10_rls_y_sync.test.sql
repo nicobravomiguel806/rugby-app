@@ -174,8 +174,8 @@ select tests.lanza($$select * from profiles$$, 'CP-149 Sin sesión no se lee nin
 reset role;
 
 -- CP-150 · Todas las tablas tienen RLS activa
-select tests.ok((select bool_and(rowsecurity) from pg_tables where schemaname = 'public'), 'CP-150 Las 22 tablas tienen RLS activa');
-select tests.ok((select count(*) from pg_tables where schemaname = 'public') = 22, 'CP-150b El esquema tiene las 22 tablas del MER');
+select tests.ok((select bool_and(rowsecurity) from pg_tables where schemaname = 'public'), 'CP-150 Las 23 tablas tienen RLS activa');
+select tests.ok((select count(*) from pg_tables where schemaname = 'public') = 23, 'CP-150b El esquema tiene las 23 tablas (22 del MER + privacy_consents, C-01)');
 
 -- CP-151 · Las funciones de permisos no están expuestas en la API (linter de Supabase, AT-01)
 select tests.ok((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -186,3 +186,6 @@ reset role;
 
 -- SP-04 · Usuario autenticado sin perfil (§3.3 caso de abuso 1). run-db-tests.sh solo ejecuta este archivo, así que se incluye aquí.
 \ir 20_usuario_sin_perfil.test.sql
+
+-- C-01 · privacy_consents y community_id inmutable (CP-161, CP-162). Mismo motivo: el runner solo ejecuta este archivo.
+\ir 30_registro.test.sql
