@@ -13,8 +13,7 @@ final class RegistroViewModelTests: XCTestCase {
             reenviar: ReenviarVerificacionUseCase(repositorio: registro),
             confirmarCorreo: ConfirmarCorreoUseCase(repositorio: registro),
             aceptarAviso: AceptarAvisoDePrivacidadUseCase(repositorio: consentimiento),
-            iniciarSesion: IniciarSesionUseCase(generadorDeNonce: GeneradorFijo(), hashDeNonce: HashFijo(),
-                                                obtenedor: GoogleFalso(error: errorDeGoogle), repositorio: SesionFalsa())
+            iniciarSesion: Armar.google(SesionFalsa(), error: errorDeGoogle)
         )
     }
 

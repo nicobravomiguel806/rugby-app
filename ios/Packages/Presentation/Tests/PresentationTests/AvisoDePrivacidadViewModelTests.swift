@@ -11,7 +11,7 @@ final class AvisoDePrivacidadViewModelTests: XCTestCase {
     private func viewModel(_ consentimiento: ConsentimientoFalso, _ sesiones: SesionFalsa) -> AvisoDePrivacidadViewModel {
         AvisoDePrivacidadViewModel(
             aceptar: AceptarAvisoDePrivacidadUseCase(repositorio: consentimiento),
-            rechazar: RechazarAvisoDePrivacidadUseCase(repositorio: consentimiento, cerrarSesion: CerrarSesionUseCase(repositorio: sesiones)),
+            rechazar: RechazarAvisoDePrivacidadUseCase(repositorio: consentimiento, cerrarSesion: Armar.cerrarSesion(sesiones)),
             consultar: ConsultarAvisoAceptadoUseCase(repositorio: consentimiento),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: sesiones)
         )
