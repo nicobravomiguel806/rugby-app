@@ -11,8 +11,6 @@ import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import java.io.IOException
-import java.net.URI
-import java.net.URLDecoder
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -93,25 +91,12 @@ class RepositorioDeRegistroSupabase(private val cliente: ClienteSupabase) : Repo
     }
 
     companion object {
-        /** Solo `rugbyapp://auth-callback…` (ADR 0008). Lo demás no se toca. */
-        fun esEnlaceDeVerificacion(enlace: String): Boolean {
-            val uri = runCatching { URI(enlace) }.getOrNull() ?: return false
-            val esperado = URI(ClienteSupabase.URL_DE_REGRESO)
-            return uri.scheme.equals(esperado.scheme, ignoreCase = true) && uri.host.equals(esperado.host, ignoreCase = true)
-        }
+        /** Solo `rugbyapp://auth-callback` con path vacío (ADR 0008, C-02). Lo demás no se toca. */
+        fun esEnlaceDeVerificacion(enlace: String): Boolean = ClienteSupabase.esEnlaceDeVerificacion(enlace)
 
         /** Parámetros de la query y del fragmento, o `null` si no es un enlace de verificación. */
-        internal fun parametrosDelEnlace(enlace: String): Map<String, String>? {
-            if (!esEnlaceDeVerificacion(enlace)) return null
-            val uri = URI(enlace)
-            return listOfNotNull(uri.rawQuery, uri.rawFragment)
-                .flatMap { it.split("&") }
-                .filter { it.isNotEmpty() }
-                .associate { par ->
-                    val (clave, valor) = par.split("=", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-                    URLDecoder.decode(clave, "UTF-8") to URLDecoder.decode(valor, "UTF-8")
-                }
-        }
+        internal fun parametrosDelEnlace(enlace: String): Map<String, String>? =
+            if (esEnlaceDeVerificacion(enlace)) ClienteSupabase.parametrosDe(enlace) else null
 
         internal fun traducir(e: Throwable): ErrorDeRegistro = when (e) {
             is ErrorDeRegistro -> e

@@ -27,7 +27,31 @@ class AlmacenEnMemoriaDePrueba : AlmacenSeguroDeSesion {
     override suspend fun saveCodeVerifier(codeVerifier: String) { this.codeVerifier = codeVerifier }
     override suspend fun loadCodeVerifier() = codeVerifier
     override suspend fun deleteCodeVerifier() { codeVerifier = null }
-    override suspend fun borrarTodo() { sesion = null; codeVerifier = null }
+    // C-02 · Entradas genéricas (marca «recuperación en curso»).
+    val entradas = mutableMapOf<String, String>()
+    override suspend fun guardar(clave: String, valor: String) { entradas[clave] = valor }
+    override suspend fun leer(clave: String): String? = entradas[clave]
+    override suspend fun borrar(clave: String) { entradas.remove(clave) }
+    override suspend fun claves(): Set<String> = entradas.keys.toSet()
+    override suspend fun borrarTodo() { sesion = null; codeVerifier = null; entradas.clear() }
+}
+
+/** C-02 · Almacén de revocaciones en memoria (ADR 0010). */
+class AlmacenDeRevocacionesEnMemoriaDePrueba : AlmacenPorClave {
+    val entradas = sortedMapOf<String, String>()
+    override suspend fun guardar(clave: String, valor: String) { entradas[clave] = valor }
+    override suspend fun leer(clave: String): String? = entradas[clave]
+    override suspend fun borrar(clave: String) { entradas.remove(clave) }
+    override suspend fun claves(): Set<String> = entradas.keys.toSet()
+
+    internal fun entrada(id: String) =
+        entradas[RepositorioDeRevocacionesPendientesSupabase.clave(id)]?.let { RepositorioDeRevocacionesPendientesSupabase.Entrada.deJson(it) }
+
+    internal fun poner(id: String, entrada: RepositorioDeRevocacionesPendientesSupabase.Entrada) {
+        entradas[RepositorioDeRevocacionesPendientesSupabase.clave(id)] = entrada.aJson()
+    }
+
+    fun ids() = entradas.keys.map { it.removePrefix(RepositorioDeRevocacionesPendientesSupabase.PREFIJO) }
 }
 
 /** Servidor falso: registra cada pedido (con su cuerpo) y responde con lo que diga `responder`. */
