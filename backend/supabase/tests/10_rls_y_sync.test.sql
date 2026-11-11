@@ -198,3 +198,6 @@ reset role;
 
 -- C-01 · Pruebas del agente de seguridad (ronda 2): ataques a la revocación del aviso (H-6). Mismo motivo que arriba.
 \ir 60_seguridad_revocacion.test.sql
+
+-- C-02 · Pruebas del agente de seguridad (ronda 1): la RPC del aviso usada por la revocación pendiente (ADR 0010). Mismo motivo que arriba.
+\ir 70_seguridad_inicio_de_sesion.test.sql
