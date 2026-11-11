@@ -7,7 +7,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import mx.rugbyapp.domain.cuentas.AceptarAvisoDePrivacidadUseCase
-import mx.rugbyapp.domain.cuentas.CerrarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ConsultarAvisoAceptadoUseCase
 import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
 import mx.rugbyapp.domain.cuentas.ErrorDeConsentimiento
@@ -34,7 +33,7 @@ class AvisoDePrivacidadViewModelTest {
 
     private fun viewModel(consentimiento: ConsentimientoFalso, sesiones: SesionFalsa) = AvisoDePrivacidadViewModel(
         AceptarAvisoDePrivacidadUseCase(consentimiento),
-        RechazarAvisoDePrivacidadUseCase(consentimiento, CerrarSesionUseCase(sesiones)),
+        RechazarAvisoDePrivacidadUseCase(consentimiento, Armar.cerrarSesion(sesiones)),
         ConsultarAvisoAceptadoUseCase(consentimiento),
         ObtenerSesionActualUseCase(sesiones),
     )

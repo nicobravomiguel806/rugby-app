@@ -33,5 +33,9 @@ class EventosDeCuenta : ViewModel() {
         const val REGISTRO = "registro"
         const val ACCESO = "acceso"
         const val AVISO = "aviso"
+        // C-02 · Llevan la generación del ViewModel: cada visita a la pantalla es un ViewModel nuevo.
+        const val INICIO_DE_SESION = "inicioDeSesion"
+        const val NUEVA_CONTRASENA = "nuevaContrasena"
+        const val ENLACE_INVALIDO = "enlaceInvalido"
     }
 }

@@ -5,15 +5,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -21,12 +24,32 @@ import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
 
 /**
  * SP-04 · Pantalla provisional Acceso (P-6): estado de la sesión, botón oficial de Google (CA-3) y «Cerrar sesión».
- * La pantalla definitiva es C-02. Espejo en iOS: Presentation/Cuentas/AccesoView.swift.
+ * C-02 · Con sesión es la hoja «Cuenta»: «Cerrar sesión» pide confirmación (Figma paso 4, P-8).
+ * Espejo en iOS: Presentation/Cuentas/AccesoView.swift.
  */
 @Composable
 fun AccesoScreen(viewModel: AccesoViewModel, modifier: Modifier = Modifier) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
+    val confirmandoCierre by viewModel.confirmandoCierre.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.cargar() }
+
+    // C-02 · Figma paso 4: «¿Cerrar sesión?» antes de cerrar (CA-3).
+    if (confirmandoCierre) {
+        AlertDialog(
+            onDismissRequest = viewModel::cancelarCierre,
+            title = { Text("¿Cerrar sesión?") },
+            text = { Text("Se borrarán los datos guardados en este teléfono.") },
+            confirmButton = {
+                TextButton(
+                    onClick = viewModel::cerrarSesion,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("acceso.confirmarCierre"),
+                ) { Text("Cerrar sesión", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelarCierre, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) { Text("Cancelar") }
+            },
+        )
+    }
 
     Column(
         modifier = modifier.fillMaxSize().padding(16.dp),
@@ -43,7 +66,10 @@ fun AccesoScreen(viewModel: AccesoViewModel, modifier: Modifier = Modifier) {
             is EstadoDeAcceso.ConSesion -> {
                 Text("Sesión iniciada", style = MaterialTheme.typography.titleMedium)
                 Text(actual.sesion.correo ?: actual.sesion.usuarioId)
-                OutlinedButton(onClick = viewModel::cerrarSesion, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
+                OutlinedButton(
+                    onClick = viewModel::pedirCerrarSesion,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("acceso.cerrarSesion"),
+                ) {
                     Text("Cerrar sesión")
                 }
             }
@@ -59,6 +85,9 @@ fun AccesoScreen(viewModel: AccesoViewModel, modifier: Modifier = Modifier) {
 internal fun mensajeDe(error: ErrorDeAutenticacion): String = when (error) {
     ErrorDeAutenticacion.Cancelado -> "Inicio cancelado"
     ErrorDeAutenticacion.CredencialRechazada -> "No se pudo validar tu cuenta de Google"
+    ErrorDeAutenticacion.CorreoInvalido -> "Escribe un correo válido, como nombre@dominio.mx"
+    ErrorDeAutenticacion.CorreoSinVerificar -> CORREO_SIN_VERIFICAR
+    ErrorDeAutenticacion.DemasiadosIntentos -> "Demasiados intentos. Espera unos minutos e inténtalo de nuevo."
     ErrorDeAutenticacion.SinConexion -> "Sin conexión. Inténtalo de nuevo"
     ErrorDeAutenticacion.ConfiguracionIncompleta -> "Configuración de Supabase incompleta"
     ErrorDeAutenticacion.Desconocido -> "Algo salió mal. Inténtalo de nuevo"

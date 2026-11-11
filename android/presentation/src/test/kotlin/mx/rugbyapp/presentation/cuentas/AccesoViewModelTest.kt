@@ -5,7 +5,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
-import mx.rugbyapp.domain.cuentas.CerrarSesionUseCase
 import mx.rugbyapp.domain.cuentas.CredencialNativa
 import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
 import mx.rugbyapp.domain.cuentas.GeneradorDeNonce
@@ -18,6 +17,9 @@ import mx.rugbyapp.domain.cuentas.RepositorioDeSesion
 import mx.rugbyapp.domain.cuentas.Sesion
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -41,8 +43,8 @@ class AccesoViewModelTest {
             return Sesion("u-1", "a@b.mx").also { guardada = it }
         }
         override suspend fun sesionActual() = guardada
+        override suspend fun iniciarSesion(correo: String, contrasena: String): Sesion = throw ErrorDeAutenticacion.CredencialRechazada
         override suspend fun borrarSesionLocal() { guardada = null }
-        override suspend fun revocarSesionEnServidor() { throw ErrorDeAutenticacion.SinConexion }
     }
 
     private fun viewModel(repositorio: Repositorio, errorDeGoogle: ErrorDeAutenticacion? = null) = AccesoViewModel(
@@ -51,10 +53,14 @@ class AccesoViewModelTest {
             object : HashDeNonce { override fun sha256Hex(nonce: String) = "hash" },
             Obtenedor(errorDeGoogle),
             repositorio,
+            pendientes,
+            Armar.reintentar(pendientes),
         ),
         ObtenerSesionActualUseCase(repositorio),
-        CerrarSesionUseCase(repositorio),
+        Armar.cerrarSesion(repositorio, pendientes),
     )
+
+    private val pendientes = PendientesFalsas()
 
     @Test fun `CP-154 cargar con sesion guardada publica con sesion`() {
         val sesion = Sesion("u-1", null)
@@ -101,5 +107,32 @@ class AccesoViewModelTest {
         vm.cerrarSesion()
 
         assertEquals(EstadoDeAcceso.SinSesion, vm.estado.value)
+    }
+
+    // C-02 · CP-013 (Figma paso 4): «Cerrar sesión» pide confirmación; «Cancelar» no cierra nada.
+    @Test fun `CP-013 cerrar sesion pide confirmacion y cancelar no cierra`() {
+        val sesion = Sesion("u-1", null)
+        val repositorio = Repositorio(sesion)
+        val vm = viewModel(repositorio)
+        vm.cargar()
+
+        vm.pedirCerrarSesion()
+        assertTrue(vm.confirmandoCierre.value)
+        vm.cancelarCierre()
+
+        assertFalse(vm.confirmandoCierre.value)
+        assertEquals(EstadoDeAcceso.ConSesion(sesion), vm.estado.value)
+        assertEquals(sesion, repositorio.guardada)
+
+        vm.pedirCerrarSesion()
+        vm.cerrarSesion()
+        assertFalse(vm.confirmandoCierre.value)
+        assertEquals(EstadoDeAcceso.SinSesion, vm.estado.value)
+        assertNull(repositorio.guardada)
+    }
+
+    @Test fun `CP-165 los textos de error nuevos no muestran detalles tecnicos`() {
+        assertEquals("Demasiados intentos. Espera unos minutos e inténtalo de nuevo.", mensajeDe(ErrorDeAutenticacion.DemasiadosIntentos))
+        assertEquals("Confirma tu correo para entrar. Te enviamos un enlace.", mensajeDe(ErrorDeAutenticacion.CorreoSinVerificar))
     }
 }

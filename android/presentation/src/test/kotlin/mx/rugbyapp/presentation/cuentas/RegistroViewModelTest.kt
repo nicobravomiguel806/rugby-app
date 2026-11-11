@@ -10,7 +10,6 @@ import mx.rugbyapp.domain.cuentas.ConfirmarCorreoUseCase
 import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
 import mx.rugbyapp.domain.cuentas.ErrorDeRegistro
 import mx.rugbyapp.domain.cuentas.FinalidadSecundaria
-import mx.rugbyapp.domain.cuentas.IniciarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ReenviarVerificacionUseCase
 import mx.rugbyapp.domain.cuentas.RegistrarUsuarioUseCase
 import mx.rugbyapp.domain.cuentas.Sesion
@@ -34,7 +33,7 @@ class RegistroViewModelTest {
             ReenviarVerificacionUseCase(registro),
             ConfirmarCorreoUseCase(registro),
             AceptarAvisoDePrivacidadUseCase(consentimiento),
-            IniciarSesionUseCase(GeneradorFijo, HashFijo, GoogleFalso(errorDeGoogle), SesionFalsa()),
+            Armar.google(SesionFalsa(), errorDeGoogle),
         )
 
     private fun llenar(vm: RegistroViewModel) {
