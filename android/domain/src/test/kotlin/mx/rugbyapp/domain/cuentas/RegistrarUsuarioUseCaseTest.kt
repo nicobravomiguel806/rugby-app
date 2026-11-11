@@ -116,6 +116,20 @@ class RegistrarUsuarioUseCaseTest {
         assertEquals(listOf("daniela@ejemplo.mx"), repositorio.reenvios)
     }
 
+    // C-02 · CA-8: en Enlace inválido la persona escribe el correo; uno inválido no llega al servidor.
+    @Test fun `CP-169 reenviar con un correo invalido da correo invalido sin llamar al repositorio`() {
+        val repositorio = RepositorioDeRegistroFalso()
+        try {
+            correr { ReenviarVerificacionUseCase(repositorio).ejecutar(correo = "daniela@") }
+            fail("Se esperaba CorreoInvalido")
+        } catch (e: ErrorDeRegistro) {
+            assertEquals(ErrorDeRegistro.CorreoInvalido, e)
+        }
+        assertEquals(emptyList<String>(), repositorio.reenvios)
+        correr { ReenviarVerificacionUseCase(repositorio).ejecutar(correo = "  Daniela@Ejemplo.MX ") }
+        assertEquals(listOf("daniela@ejemplo.mx"), repositorio.reenvios)
+    }
+
     @Test fun `CP-160j la descripcion de los datos no contiene la contrasena`() {
         val d = datos(contrasena = "secreta-1234567")
         assertFalse(d.toString().contains("secreta-1234567"))
