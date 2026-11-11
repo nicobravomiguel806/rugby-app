@@ -5,19 +5,26 @@ package mx.rugbyapp.domain.cuentas
  *
  * Contrato del nonce (CP-159): al proveedor (Google) se le pasa SHA-256(nonce) en hex y a Supabase el nonce crudo.
  * Supabase hashea el crudo y lo compara con el claim `nonce` del ID token. Domain solo orquesta: no hace criptografía.
+ * C-02 · Antes de abrir Google reintenta las revocaciones pendientes; después de iniciar, las pendientes de la misma
+ * cuenta pierden el aviso y conservan solo la revocación de la sesión vieja (P-4, CP-165e).
  */
 class IniciarSesionUseCase(
     private val generadorDeNonce: GeneradorDeNonce,
     private val hashDeNonce: HashDeNonce,
     private val obtenedor: ObtenedorDeCredencial,
     private val repositorio: RepositorioDeSesion,
+    private val pendientes: RepositorioDeRevocacionesPendientes,
+    private val reintentar: ReintentarRevocacionesPendientesUseCase,
 ) {
     suspend fun ejecutar(p: ProveedorDeIdentidad): Sesion {
         val nonceCrudo = generadorDeNonce.generar()
         if (nonceCrudo.isEmpty()) throw ErrorDeAutenticacion.CredencialRechazada
         val nonceHasheado = hashDeNonce.sha256Hex(nonceCrudo)
 
-        val credencial = obtenedor.obtener(p, nonceHasheado = nonceHasheado) // a Google, el HASH
-        return repositorio.iniciarSesion(credencial, nonce = nonceCrudo)     // a Supabase, el CRUDO
+        reintentar.ejecutar()
+        val credencial = obtenedor.obtener(p, nonceHasheado = nonceHasheado)    // a Google, el HASH
+        val sesion = repositorio.iniciarSesion(credencial, nonce = nonceCrudo)  // a Supabase, el CRUDO
+        ignorarFallas { pendientes.quitarAviso(sesion.usuarioId) }
+        return sesion
     }
 }
