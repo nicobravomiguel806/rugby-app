@@ -7,10 +7,12 @@ final class IniciarSesionUseCaseTests: XCTestCase {
     private let credencial = CredencialNativa(proveedor: .google, idToken: "id-token", accessToken: "access-token")
     private var bitacora: Bitacora!
     private var repositorio: RepositorioFalso!
+    private var pendientes: RepositorioDeRevocacionesPendientesFalso!
 
     override func setUp() {
         bitacora = Bitacora()
         repositorio = RepositorioFalso(bitacora: bitacora)
+        pendientes = RepositorioDeRevocacionesPendientesFalso()
     }
 
     private func casoDeUso(
@@ -21,7 +23,9 @@ final class IniciarSesionUseCaseTests: XCTestCase {
             generadorDeNonce: GeneradorFalso(valor: nonce, bitacora: bitacora),
             hashDeNonce: HashFalso(bitacora: bitacora),
             obtenedor: ObtenedorFalso(resultado: obtenedor ?? .success(credencial), bitacora: bitacora),
-            repositorio: repositorio
+            repositorio: repositorio,
+            pendientes: pendientes,
+            reintentar: ReintentarRevocacionesPendientesUseCase(pendientes: pendientes, reloj: RelojFalso(ahora: pendientes.ahora))
         )
     }
 

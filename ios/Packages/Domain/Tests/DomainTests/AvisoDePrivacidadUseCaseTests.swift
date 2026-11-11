@@ -59,7 +59,7 @@ final class AvisoDePrivacidadUseCaseTests: XCTestCase {
         let aceptado = try await ConsultarAvisoAceptadoUseCase(repositorio: consentimientos).ejecutar()
         XCTAssertFalse(aceptado)
 
-        try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: CerrarSesionUseCase(repositorio: sesiones)).ejecutar()
+        try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: cerrarSesion(sesiones)).ejecutar()
 
         let despues = await sesiones.sesionActual()
         XCTAssertNil(despues)
@@ -70,9 +70,10 @@ final class AvisoDePrivacidadUseCaseTests: XCTestCase {
 
     func test_CP164b_siLaRevocacionFallaElRechazoTerminaSinErrorYLaSesionLocalQuedaBorrada() async throws {
         let sesiones = RepositorioFalso(bitacora: Bitacora(), guardada: sesion)
-        sesiones.errorAlRevocar = .sinConexion
+        let pendientes = RepositorioDeRevocacionesPendientesFalso()
+        pendientes.errorAlRevocar = .sinConexion
 
-        try await RechazarAvisoDePrivacidadUseCase(repositorio: RepositorioDeConsentimientoFalso(), cerrarSesion: CerrarSesionUseCase(repositorio: sesiones)).ejecutar()
+        try await RechazarAvisoDePrivacidadUseCase(repositorio: RepositorioDeConsentimientoFalso(), cerrarSesion: cerrarSesion(sesiones, pendientes)).ejecutar()
 
         let despues = await sesiones.sesionActual()
         XCTAssertNil(despues)
@@ -82,7 +83,7 @@ final class AvisoDePrivacidadUseCaseTests: XCTestCase {
         let sesiones = RepositorioFalso(bitacora: Bitacora(), guardada: sesion)
         sesiones.errorAlBorrar = .desconocido
         do {
-            try await RechazarAvisoDePrivacidadUseCase(repositorio: RepositorioDeConsentimientoFalso(), cerrarSesion: CerrarSesionUseCase(repositorio: sesiones)).ejecutar()
+            try await RechazarAvisoDePrivacidadUseCase(repositorio: RepositorioDeConsentimientoFalso(), cerrarSesion: cerrarSesion(sesiones)).ejecutar()
             XCTFail("Se esperaba el error de borrarSesionLocal")
         } catch {
             XCTAssertEqual(error as? ErrorDeAutenticacion, .desconocido)
@@ -159,7 +160,7 @@ final class AvisoDePrivacidadUseCaseTests: XCTestCase {
         let sesiones = RepositorioFalso(bitacora: bitacora, guardada: sesion)
         let consentimientos = RepositorioDeConsentimientoFalso(aceptadas: ["v0-borrador"], bitacora: bitacora)
 
-        try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: CerrarSesionUseCase(repositorio: sesiones)).ejecutar()
+        try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: cerrarSesion(sesiones)).ejecutar()
 
         XCTAssertEqual(consentimientos.revocaciones, ["v0-borrador"])
         let orden = bitacora.llamadas.filter { ["revocarAviso", "borrarSesionLocal"].contains($0) }
@@ -182,13 +183,71 @@ final class AvisoDePrivacidadUseCaseTests: XCTestCase {
         consentimientos.errorAlRevocar = .sinConexion
 
         do {
-            try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: CerrarSesionUseCase(repositorio: sesiones)).ejecutar()
+            try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: cerrarSesion(sesiones)).ejecutar()
             XCTFail("Se esperaba sinConexion")
         } catch {
             XCTAssertEqual(error as? ErrorDeConsentimiento, .sinConexion)
         }
         let despues = await sesiones.sesionActual()
         XCTAssertNil(despues)
+    }
+
+    // C-02 · CA-6: si la consulta `avisoAceptado` falla (sin red), la sesión se cierra igual, el error se propaga sin
+    // transformarse y la revocación del aviso queda pendiente junto con la de la sesión (CA-7).
+    func test_CP164g_siLaConsultaDelAvisoFallaLaSesionSeCierraIgualYElErrorSePropaga() async {
+        let bitacora = Bitacora()
+        let sesiones = RepositorioFalso(bitacora: bitacora, guardada: sesion)
+        let consentimientos = RepositorioDeConsentimientoFalso(aceptadas: ["v0-borrador"], bitacora: bitacora)
+        consentimientos.errorAlConsultar = .sinConexion
+        let pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora: bitacora)
+        pendientes.errorAlRevocar = .sinConexion
+
+        do {
+            try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: cerrarSesion(sesiones, pendientes)).ejecutar()
+            XCTFail("Se esperaba sinConexion")
+        } catch {
+            XCTAssertEqual(error as? ErrorDeConsentimiento, .sinConexion)
+        }
+        let despues = await sesiones.sesionActual()
+        XCTAssertNil(despues)
+        XCTAssertEqual(bitacora.llamadas.filter { $0 == "borrarSesionLocal" }.count, 1)
+        XCTAssertEqual(bitacora.llamadas.filter { $0 == "revocarAviso" }.count, 0)
+        XCTAssertEqual(pendientes.guardadas.count, 1)
+        XCTAssertEqual(pendientes.guardadas.first?.versionDelAvisoPorRevocar, AvisoDePrivacidad.versionVigente)
+    }
+
+    // C-02 · CA-7: si falla la revocación del aviso, la sesión se cierra igual, queda la pendiente con el aviso y el
+    // error se propaga.
+    func test_CP168b_siRevocarElAvisoFallaQuedaLaPendienteConAvisoYElErrorSePropaga() async {
+        let sesiones = RepositorioFalso(bitacora: Bitacora(), guardada: sesion)
+        let consentimientos = RepositorioDeConsentimientoFalso(aceptadas: ["v0-borrador"])
+        consentimientos.errorAlRevocar = .sinConexion
+        let pendientes = RepositorioDeRevocacionesPendientesFalso()
+        pendientes.errorAlRevocar = .sinConexion
+
+        do {
+            try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: cerrarSesion(sesiones, pendientes)).ejecutar()
+            XCTFail("Se esperaba sinConexion")
+        } catch {
+            XCTAssertEqual(error as? ErrorDeConsentimiento, .sinConexion)
+        }
+        let despues = await sesiones.sesionActual()
+        XCTAssertNil(despues)
+        XCTAssertEqual(pendientes.guardadas.map(\.versionDelAvisoPorRevocar), [AvisoDePrivacidad.versionVigente])
+    }
+
+    // C-02 · Sin fallas y con consentimiento previo: el aviso se revoca en línea y la pendiente no lleva aviso, así que
+    // no se revoca dos veces.
+    func test_CP168c_sinFallasElAvisoSeRevocaEnLineaYLaPendienteNoLlevaAviso() async throws {
+        let sesiones = RepositorioFalso(bitacora: Bitacora(), guardada: sesion)
+        let consentimientos = RepositorioDeConsentimientoFalso(aceptadas: ["v0-borrador"])
+        let pendientes = RepositorioDeRevocacionesPendientesFalso()
+        pendientes.errorAlRevocar = .sinConexion
+
+        try await RechazarAvisoDePrivacidadUseCase(repositorio: consentimientos, cerrarSesion: cerrarSesion(sesiones, pendientes)).ejecutar()
+
+        XCTAssertEqual(consentimientos.revocaciones, ["v0-borrador"])
+        XCTAssertEqual(pendientes.guardadas.map(\.versionDelAvisoPorRevocar), [nil])
     }
 }
 

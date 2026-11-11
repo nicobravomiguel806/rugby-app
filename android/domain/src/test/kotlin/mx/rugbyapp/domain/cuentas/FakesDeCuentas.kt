@@ -40,18 +40,29 @@ class ObtenedorFalso(private val resultado: Result<CredencialNativa>, private va
 class RepositorioFalso(private val bitacora: Bitacora, guardada: Sesion? = null) : RepositorioDeSesion {
     var resultadoDeInicio: Result<Sesion> = Result.success(Sesion("u-1", "a@b.mx"))
     var errorAlBorrar: ErrorDeAutenticacion? = null
-    var errorAlRevocar: ErrorDeAutenticacion? = null
     var guardada: Sesion? = guardada
         private set
     var credencialRecibida: CredencialNativa? = null
         private set
     var nonceRecibido: String? = null
         private set
+    // C-02 · Lo que llegó al inicio con correo.
+    var correoRecibido: String? = null
+        private set
+    var contrasenaRecibida: String? = null
+        private set
 
     override suspend fun iniciarSesion(c: CredencialNativa, nonce: String): Sesion {
         bitacora.anotar("iniciarSesion($nonce)")
         credencialRecibida = c
         nonceRecibido = nonce
+        return resultadoDeInicio.getOrThrow().also { guardada = it }
+    }
+
+    override suspend fun iniciarSesion(correo: String, contrasena: String): Sesion {
+        bitacora.anotar("iniciarSesionConCorreo")
+        correoRecibido = correo
+        contrasenaRecibida = contrasena
         return resultadoDeInicio.getOrThrow().also { guardada = it }
     }
 
@@ -62,12 +73,113 @@ class RepositorioFalso(private val bitacora: Bitacora, guardada: Sesion? = null)
         errorAlBorrar?.let { throw it }
         guardada = null
     }
+}
 
-    override suspend fun revocarSesionEnServidor() {
-        bitacora.anotar("revocarSesionEnServidor")
-        errorAlRevocar?.let { throw it }
+// C-02 · Fakes de la cola de revocaciones pendientes (ADR 0010), del reloj y de la recuperación de contraseña.
+
+class RelojFalso(private val ahora: Long) : Reloj {
+    override fun ahoraEnSegundos(): Long = ahora
+}
+
+/** Guarda las pendientes en memoria, sin tokens. `revocar` quita la pendiente si no falla; con error, la deja. */
+class RepositorioDeRevocacionesPendientesFalso(
+    val bitacora: Bitacora = Bitacora(),
+    var ahora: Long = 1_000_000,
+    guardadas: List<RevocacionPendiente> = emptyList(),
+) : RepositorioDeRevocacionesPendientes {
+    var errorAlGuardar: ErrorDeAutenticacion? = null
+    /** Error para todas las revocaciones, salvo que `erroresPorId` diga otra cosa. */
+    var errorAlRevocar: ErrorDeAutenticacion? = null
+    var erroresPorId: Map<String, ErrorDeAutenticacion> = emptyMap()
+    private val _guardadas = guardadas.toMutableList()
+    val guardadas: List<RevocacionPendiente> get() = _guardadas.toList()
+    val revocadas = mutableListOf<RevocacionPendiente>()
+    private var contador = 0
+
+    override suspend fun guardar(usuarioId: String, revocarAviso: String?): RevocacionPendiente {
+        bitacora.anotar("guardar($usuarioId,${revocarAviso ?: "-"})")
+        errorAlGuardar?.let { throw it }
+        contador += 1
+        return RevocacionPendiente("p-$contador", usuarioId, revocarAviso, ahora).also { _guardadas += it }
+    }
+
+    override suspend fun descartar(id: String) {
+        bitacora.anotar("descartar($id)")
+        _guardadas.removeAll { it.id == id }
+    }
+
+    override suspend fun quitarAviso(usuarioId: String) {
+        bitacora.anotar("quitarAviso($usuarioId)")
+        _guardadas.replaceAll { if (it.usuarioId == usuarioId) it.copy(versionDelAvisoPorRevocar = null) else it }
+    }
+
+    override suspend fun pendientes(): List<RevocacionPendiente> = guardadas
+
+    override suspend fun revocar(pendiente: RevocacionPendiente) {
+        bitacora.anotar("revocar(${pendiente.id})")
+        revocadas += pendiente
+        (erroresPorId[pendiente.id] ?: errorAlRevocar)?.let { throw it }
+        _guardadas.removeAll { it.id == pendiente.id }
     }
 }
+
+class RepositorioDeRecuperacionFalso(
+    val bitacora: Bitacora = Bitacora(),
+    /** Correos con cuenta. El repositorio responde igual exista o no (AT-11): solo cambia `enviadosAConocidos`. */
+    var conocidos: Set<String> = emptySet(),
+    enCurso: Boolean = false,
+) : RepositorioDeRecuperacion {
+    var errorAlEnviar: ErrorDeRecuperacion? = null
+    var errorAlConfirmar: ErrorDeRecuperacion? = null
+    var errorAlCambiar: ErrorDeRecuperacion? = null
+    var errorAlCerrarOtras: ErrorDeRecuperacion? = null
+    var sesionAlConfirmar = Sesion("u-1", "daniela@ejemplo.mx")
+    var enCurso: Boolean = enCurso
+        private set
+    val enviados = mutableListOf<String>()
+    val enviadosAConocidos = mutableListOf<String>()
+    val enlacesRecibidos = mutableListOf<String>()
+    val contrasenasRecibidas = mutableListOf<String>()
+
+    override suspend fun enviarEnlace(correo: String) {
+        bitacora.anotar("enviarEnlace")
+        enviados += correo
+        if (correo in conocidos) enviadosAConocidos += correo
+        errorAlEnviar?.let { throw it }
+    }
+
+    override suspend fun confirmarEnlace(enlace: String): Sesion {
+        bitacora.anotar("confirmarEnlace")
+        enlacesRecibidos += enlace
+        errorAlConfirmar?.let { throw it }
+        enCurso = true
+        return sesionAlConfirmar
+    }
+
+    override suspend fun cambiarContrasena(nueva: String) {
+        bitacora.anotar("cambiarContrasena")
+        contrasenasRecibidas += nueva
+        errorAlCambiar?.let { throw it }
+    }
+
+    override suspend fun cerrarOtrasSesiones() {
+        bitacora.anotar("cerrarOtrasSesiones")
+        errorAlCerrarOtras?.let { throw it }
+    }
+
+    override suspend fun recuperacionEnCurso(): Boolean = enCurso
+
+    override suspend fun terminarRecuperacion() {
+        bitacora.anotar("terminarRecuperacion")
+        enCurso = false
+    }
+}
+
+/** C-02 · Arma `CerrarSesionUseCase` con sus dos puertos y el reintento, como lo compone App. */
+fun cerrarSesion(
+    sesiones: RepositorioFalso,
+    pendientes: RepositorioDeRevocacionesPendientesFalso = RepositorioDeRevocacionesPendientesFalso(),
+) = CerrarSesionUseCase(sesiones, pendientes, ReintentarRevocacionesPendientesUseCase(pendientes, RelojFalso(pendientes.ahora)))
 
 // C-01 · Fakes de RepositorioDeRegistro y RepositorioDeConsentimiento. Cuentan las llamadas y guardan lo recibido.
 

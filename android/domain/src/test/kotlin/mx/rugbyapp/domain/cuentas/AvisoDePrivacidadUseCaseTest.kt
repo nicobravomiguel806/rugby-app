@@ -69,7 +69,7 @@ class AvisoDePrivacidadUseCaseTest {
 
         assertFalse(correr { ConsultarAvisoAceptadoUseCase(consentimientos).ejecutar() })
 
-        correr { RechazarAvisoDePrivacidadUseCase(consentimientos, CerrarSesionUseCase(sesiones)).ejecutar() }
+        correr { RechazarAvisoDePrivacidadUseCase(consentimientos, cerrarSesion(sesiones)).ejecutar() }
 
         assertNull(correr { sesiones.sesionActual() })
         assertEquals(1, bitacora.llamadas.count { it == "borrarSesionLocal" })
@@ -78,9 +78,10 @@ class AvisoDePrivacidadUseCaseTest {
     }
 
     @Test fun `CP-164b si la revocacion falla el rechazo termina sin error y la sesion local queda borrada`() {
-        val sesiones = RepositorioFalso(Bitacora(), sesion).apply { errorAlRevocar = ErrorDeAutenticacion.SinConexion }
+        val sesiones = RepositorioFalso(Bitacora(), sesion)
+        val pendientes = RepositorioDeRevocacionesPendientesFalso().apply { errorAlRevocar = ErrorDeAutenticacion.SinConexion }
 
-        correr { RechazarAvisoDePrivacidadUseCase(RepositorioDeConsentimientoFalso(), CerrarSesionUseCase(sesiones)).ejecutar() }
+        correr { RechazarAvisoDePrivacidadUseCase(RepositorioDeConsentimientoFalso(), cerrarSesion(sesiones, pendientes)).ejecutar() }
 
         assertNull(correr { sesiones.sesionActual() })
     }
@@ -89,7 +90,7 @@ class AvisoDePrivacidadUseCaseTest {
         val sesiones = RepositorioFalso(Bitacora(), sesion).apply { errorAlBorrar = ErrorDeAutenticacion.Desconocido }
 
         assertThrows(ErrorDeAutenticacion.Desconocido::class.java) {
-            correr { RechazarAvisoDePrivacidadUseCase(RepositorioDeConsentimientoFalso(), CerrarSesionUseCase(sesiones)).ejecutar() }
+            correr { RechazarAvisoDePrivacidadUseCase(RepositorioDeConsentimientoFalso(), cerrarSesion(sesiones)).ejecutar() }
         }
         assertEquals(sesion, correr { sesiones.sesionActual() })
     }
@@ -157,7 +158,7 @@ class AvisoDePrivacidadUseCaseTest {
         val sesiones = RepositorioFalso(bitacora, sesion)
         val consentimientos = RepositorioDeConsentimientoFalso(aceptadas = setOf("v0-borrador"), bitacora = bitacora)
 
-        correr { RechazarAvisoDePrivacidadUseCase(consentimientos, CerrarSesionUseCase(sesiones)).ejecutar() }
+        correr { RechazarAvisoDePrivacidadUseCase(consentimientos, cerrarSesion(sesiones)).ejecutar() }
 
         assertEquals(listOf("v0-borrador"), consentimientos.revocaciones)
         assertEquals(
@@ -181,8 +182,57 @@ class AvisoDePrivacidadUseCaseTest {
         }
 
         assertThrows(ErrorDeConsentimiento.SinConexion::class.java) {
-            correr { RechazarAvisoDePrivacidadUseCase(consentimientos, CerrarSesionUseCase(sesiones)).ejecutar() }
+            correr { RechazarAvisoDePrivacidadUseCase(consentimientos, cerrarSesion(sesiones)).ejecutar() }
         }
         assertNull(correr { sesiones.sesionActual() })
+    }
+
+    // C-02 · CA-6: si la consulta `avisoAceptado` falla (sin red), la sesión se cierra igual, el error se propaga sin
+    // transformarse y la revocación del aviso queda pendiente junto con la de la sesión (CA-7).
+    @Test fun `CP-164g si la consulta del aviso falla la sesion se cierra igual y el error se propaga`() {
+        val bitacora = Bitacora()
+        val sesiones = RepositorioFalso(bitacora, sesion)
+        val consentimientos = RepositorioDeConsentimientoFalso(aceptadas = setOf("v0-borrador"), bitacora = bitacora).apply {
+            errorAlConsultar = ErrorDeConsentimiento.SinConexion
+        }
+        val pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora).apply { errorAlRevocar = ErrorDeAutenticacion.SinConexion }
+
+        assertThrows(ErrorDeConsentimiento.SinConexion::class.java) {
+            correr { RechazarAvisoDePrivacidadUseCase(consentimientos, cerrarSesion(sesiones, pendientes)).ejecutar() }
+        }
+        assertNull(correr { sesiones.sesionActual() })
+        assertEquals(1, bitacora.llamadas.count { it == "borrarSesionLocal" })
+        assertEquals(0, bitacora.llamadas.count { it == "revocarAviso" })
+        assertEquals(1, pendientes.guardadas.size)
+        assertEquals(AvisoDePrivacidad.VERSION_VIGENTE, pendientes.guardadas.first().versionDelAvisoPorRevocar)
+    }
+
+    // C-02 · CA-7: si falla la revocación del aviso, la sesión se cierra igual, queda la pendiente con el aviso y el
+    // error se propaga.
+    @Test fun `CP-168b si revocar el aviso falla queda la pendiente con aviso y el error se propaga`() {
+        val sesiones = RepositorioFalso(Bitacora(), sesion)
+        val consentimientos = RepositorioDeConsentimientoFalso(aceptadas = setOf("v0-borrador")).apply {
+            errorAlRevocar = ErrorDeConsentimiento.SinConexion
+        }
+        val pendientes = RepositorioDeRevocacionesPendientesFalso().apply { errorAlRevocar = ErrorDeAutenticacion.SinConexion }
+
+        assertThrows(ErrorDeConsentimiento.SinConexion::class.java) {
+            correr { RechazarAvisoDePrivacidadUseCase(consentimientos, cerrarSesion(sesiones, pendientes)).ejecutar() }
+        }
+        assertNull(correr { sesiones.sesionActual() })
+        assertEquals(listOf(AvisoDePrivacidad.VERSION_VIGENTE), pendientes.guardadas.map { it.versionDelAvisoPorRevocar })
+    }
+
+    // C-02 · Sin fallas y con consentimiento previo: el aviso se revoca en línea y la pendiente no lleva aviso, así que
+    // no se revoca dos veces.
+    @Test fun `CP-168c sin fallas el aviso se revoca en linea y la pendiente no lleva aviso`() {
+        val sesiones = RepositorioFalso(Bitacora(), sesion)
+        val consentimientos = RepositorioDeConsentimientoFalso(aceptadas = setOf("v0-borrador"))
+        val pendientes = RepositorioDeRevocacionesPendientesFalso().apply { errorAlRevocar = ErrorDeAutenticacion.SinConexion }
+
+        correr { RechazarAvisoDePrivacidadUseCase(consentimientos, cerrarSesion(sesiones, pendientes)).ejecutar() }
+
+        assertEquals(listOf("v0-borrador"), consentimientos.revocaciones)
+        assertEquals(listOf<String?>(null), pendientes.guardadas.map { it.versionDelAvisoPorRevocar })
     }
 }
