@@ -3,6 +3,8 @@
 
     <!-- SP-04 · H-21: sin este permiso OkHttp lanza SecurityException y la app se cierra al iniciar sesión. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- C-02 · CA-4 (ADR 0010): saber cuándo vuelve la red para reintentar las revocaciones pendientes. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- AT-12: sin tráfico en claro, ni en el manifiesto ni en la configuración de red.
          SP-04 · CA-2 / AT-17: sin respaldo del sistema. allowBackup="false" no frena la transferencia entre equipos en
@@ -27,12 +29,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- C-01 · ADR 0008 / AT-19: rugbyapp://auth-callback?code=… con PKCE (App Links con dominio propio en SP-07). -->
+            <!-- C-01 · ADR 0008 / AT-19: rugbyapp://auth-callback?code=… con PKCE (App Links con dominio propio en SP-07).
+                 C-02 · rugbyapp://recuperar-contrasena?code=… (recuperación de contraseña, también con PKCE). La app
+                 exige además host exacto y path vacío antes de canjear (C02-7). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="rugbyapp" android:host="auth-callback" />
+                <data android:host="recuperar-contrasena" />
             </intent-filter>
         </activity>
     </application>

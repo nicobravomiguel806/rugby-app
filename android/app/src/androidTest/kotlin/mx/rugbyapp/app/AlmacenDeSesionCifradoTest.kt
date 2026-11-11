@@ -2,14 +2,19 @@ package mx.rugbyapp.app
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.auth.user.UserSession
 import java.io.File
+import java.io.IOException
 import java.security.KeyStore
 import java.security.ProviderException
 import java.util.UUID
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import mx.rugbyapp.data.cuentas.AlmacenDeSesionCifrado
@@ -26,7 +31,7 @@ import org.junit.runner.RunWith
 /**
  * SP-04 · Almacén real (Tink AES-GCM + Android Keystore + DataStore, ADR 0007) en el dispositivo.
  * CP-154 (otra instancia lee la misma sesión), CP-155 (cerrar sesión no deja token), CA-1 (nada en claro en
- * shared_prefs ni en el archivo de DataStore) y CA-2 (sin respaldo). Espejo en iOS: RugbyAppTests/AlmacenDeSesionKeychainTests.swift.
+ * shared_prefs ni en el archivo de DataStore) y CA-2 (sin respaldo). C-02 · CP-170 (H-20) y CP-167h (revocaciones). Espejo en iOS: RugbyAppTests/AlmacenDeSesionKeychainTests.swift.
  * Sin espacios en los nombres: el dex de minSdk 29 no los admite en pruebas instrumentadas.
  */
 @RunWith(AndroidJUnit4::class)
@@ -92,10 +97,10 @@ class AlmacenDeSesionCifradoTest {
         almacen().saveSession(sesion)
         almacen().saveCodeVerifier("verificador")
         var intentos = 0
-        val conKeystoreRoto = AlmacenDeSesionCifrado(contexto, nombre, alias) {
+        val conKeystoreRoto = AlmacenDeSesionCifrado(contexto, nombre, alias, fabricaDeAead = {
             intentos++
             throw ProviderException("Keystore no disponible (simulado)")
-        }
+        })
 
         assertNull(conKeystoreRoto.loadSession())
         assertNull(conKeystoreRoto.loadCodeVerifier())
@@ -129,6 +134,57 @@ class AlmacenDeSesionCifradoTest {
         } finally {
             archivo.delete()
             contexto.getSharedPreferences("${nombreNuevo}_keyset", Context.MODE_PRIVATE).edit().clear().commit()
+        }
+    }
+
+    /**
+     * C-02 · CP-170 / CA-5 (SP-04 H-20): un IOException real al leer el archivo devuelve `null`, sin borrar nada y sin
+     * cerrar la app. La sesión guardada sigue ahí para la siguiente lectura.
+     */
+    @Test fun cp170_unIOExceptionAlLeerDevuelveNullSinBorrarNiCerrarLaApp() = runBlocking {
+        almacen().saveSession(sesion)
+        var escrituras = 0
+        val disco = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flow { throw IOException("disco no disponible (simulado)") }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                escrituras++
+                throw IOException("disco no disponible (simulado)")
+            }
+        }
+        val conDiscoRoto = AlmacenDeSesionCifrado(contexto, nombre, alias, datosDePrueba = disco)
+
+        assertNull(conDiscoRoto.loadSession())
+        assertNull(conDiscoRoto.loadCodeVerifier())
+        assertNull(RepositorioDeSesionSupabase(ConfiguracionDeSupabase("https://x.supabase.co", "k"), conDiscoRoto).sesionActual())
+        assertEquals("no llama a borrarTodo()", 0, escrituras)
+        assertEquals("la sesión sigue guardada", sesion.accessToken, almacen().loadSession()?.accessToken)
+    }
+
+    /**
+     * C-02 · CP-167h (ADR 0010, AT-10, AT-17): la revocación pendiente vive cifrada en su propio archivo
+     * (`revocaciones.preferences_pb`), con su llave y su associated data; nunca en claro, y `borrarTodo()` de la sesión
+     * no la toca. Espejo en iOS: RugbyAppTests/AlmacenDeRevocacionesKeychainTests.swift.
+     */
+    @Test fun cp167h_laPendienteSeGuardaCifradaYCerrarSesionNoLaBorra() = runBlocking {
+        val nombreDeRevocaciones = "revocaciones_prueba"
+        val aliasDeRevocaciones = "rugbyapp_revocaciones_prueba"
+        val revocaciones = AlmacenDeSesionCifrado(contexto, nombreDeRevocaciones, aliasDeRevocaciones)
+        try {
+            val entrada = """{"usuarioId":"u-1","refreshToken":"$refreshToken","creadaEn":1}"""
+            revocaciones.guardar("revocacion_p-1", entrada)
+            almacen().saveSession(sesion)
+
+            almacen().borrarTodo() // cerrar sesión
+
+            val otraInstancia = AlmacenDeSesionCifrado(contexto, nombreDeRevocaciones, aliasDeRevocaciones)
+            assertEquals(entrada, otraInstancia.leer("revocacion_p-1"))
+            assertEquals(setOf("revocacion_p-1"), otraInstancia.claves())
+            assertTrue(File(contexto.filesDir, "datastore/$nombreDeRevocaciones.preferences_pb").isFile)
+            assertSinTokensEnClaro()
+        } finally {
+            revocaciones.borrarTodo()
+            contexto.getSharedPreferences("${nombreDeRevocaciones}_keyset", Context.MODE_PRIVATE).edit().clear().commit()
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(aliasDeRevocaciones)
         }
     }
 

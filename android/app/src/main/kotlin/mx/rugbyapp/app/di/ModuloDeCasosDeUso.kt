@@ -6,22 +6,33 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 import mx.rugbyapp.app.BuildConfig
+import mx.rugbyapp.app.cuentas.MonitorDeRed
 import mx.rugbyapp.app.cuentas.ObtenedorDeCredencialGoogle
+import mx.rugbyapp.app.cuentas.PreparacionDelArranque
 import mx.rugbyapp.domain.cuentas.AceptarAvisoDePrivacidadUseCase
+import mx.rugbyapp.domain.cuentas.CerrarRecuperacionAbandonadaUseCase
 import mx.rugbyapp.domain.cuentas.CerrarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ConfirmarCorreoUseCase
+import mx.rugbyapp.domain.cuentas.ConfirmarRecuperacionDeContrasenaUseCase
 import mx.rugbyapp.domain.cuentas.ConsultarAvisoAceptadoUseCase
 import mx.rugbyapp.domain.cuentas.GeneradorDeNonce
 import mx.rugbyapp.domain.cuentas.HashDeNonce
 import mx.rugbyapp.domain.cuentas.HayQuePedirElAvisoAlArrancarUseCase
+import mx.rugbyapp.domain.cuentas.IniciarSesionConCorreoUseCase
 import mx.rugbyapp.domain.cuentas.IniciarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ObtenerSesionActualUseCase
+import mx.rugbyapp.domain.cuentas.PedirRecuperacionDeContrasenaUseCase
 import mx.rugbyapp.domain.cuentas.RechazarAvisoDePrivacidadUseCase
 import mx.rugbyapp.domain.cuentas.ReenviarVerificacionUseCase
 import mx.rugbyapp.domain.cuentas.RegistrarUsuarioUseCase
+import mx.rugbyapp.domain.cuentas.ReintentarRevocacionesPendientesUseCase
+import mx.rugbyapp.domain.cuentas.Reloj
 import mx.rugbyapp.domain.cuentas.RepositorioDeConsentimiento
+import mx.rugbyapp.domain.cuentas.RepositorioDeRecuperacion
 import mx.rugbyapp.domain.cuentas.RepositorioDeRegistro
+import mx.rugbyapp.domain.cuentas.RepositorioDeRevocacionesPendientes
 import mx.rugbyapp.domain.cuentas.RepositorioDeSesion
+import mx.rugbyapp.domain.cuentas.RestablecerContrasenaUseCase
 import mx.rugbyapp.domain.cuentas.ValidadorDeRegistro
 import mx.rugbyapp.domain.rules.ObtenerModalidadesUseCase
 import mx.rugbyapp.domain.rules.RepositorioDeReglas
@@ -38,19 +49,61 @@ object ModuloDeCasosDeUso {
     @Provides @Singleton
     fun obtenedorDeGoogle(): ObtenedorDeCredencialGoogle = ObtenedorDeCredencialGoogle(BuildConfig.GOOGLE_WEB_CLIENT_ID)
 
+    // C-02 · Revocaciones pendientes (ADR 0010): se reintentan al arrancar, al volver la red y antes de iniciar sesión.
+    @Provides
+    fun reintentarRevocaciones(pendientes: RepositorioDeRevocacionesPendientes, reloj: Reloj): ReintentarRevocacionesPendientesUseCase =
+        ReintentarRevocacionesPendientesUseCase(pendientes, reloj)
+
     @Provides
     fun iniciarSesion(
         generador: GeneradorDeNonce,
         hash: HashDeNonce,
         obtenedor: ObtenedorDeCredencialGoogle,
         repositorio: RepositorioDeSesion,
-    ): IniciarSesionUseCase = IniciarSesionUseCase(generador, hash, obtenedor, repositorio)
+        pendientes: RepositorioDeRevocacionesPendientes,
+        reintentar: ReintentarRevocacionesPendientesUseCase,
+    ): IniciarSesionUseCase = IniciarSesionUseCase(generador, hash, obtenedor, repositorio, pendientes, reintentar)
+
+    @Provides
+    fun iniciarSesionConCorreo(
+        repositorio: RepositorioDeSesion,
+        pendientes: RepositorioDeRevocacionesPendientes,
+        reintentar: ReintentarRevocacionesPendientesUseCase,
+    ): IniciarSesionConCorreoUseCase = IniciarSesionConCorreoUseCase(repositorio, pendientes, reintentar)
 
     @Provides
     fun obtenerSesionActual(repositorio: RepositorioDeSesion): ObtenerSesionActualUseCase = ObtenerSesionActualUseCase(repositorio)
 
     @Provides
-    fun cerrarSesion(repositorio: RepositorioDeSesion): CerrarSesionUseCase = CerrarSesionUseCase(repositorio)
+    fun cerrarSesion(
+        repositorio: RepositorioDeSesion,
+        pendientes: RepositorioDeRevocacionesPendientes,
+        reintentar: ReintentarRevocacionesPendientesUseCase,
+    ): CerrarSesionUseCase = CerrarSesionUseCase(repositorio, pendientes, reintentar)
+
+    // C-02 · Recuperación de contraseña (CA-2, D-7).
+    @Provides
+    fun pedirRecuperacion(repositorio: RepositorioDeRecuperacion): PedirRecuperacionDeContrasenaUseCase =
+        PedirRecuperacionDeContrasenaUseCase(repositorio)
+
+    @Provides
+    fun confirmarRecuperacion(repositorio: RepositorioDeRecuperacion): ConfirmarRecuperacionDeContrasenaUseCase =
+        ConfirmarRecuperacionDeContrasenaUseCase(repositorio)
+
+    @Provides
+    fun restablecerContrasena(repositorio: RepositorioDeRecuperacion): RestablecerContrasenaUseCase = RestablecerContrasenaUseCase(repositorio)
+
+    @Provides
+    fun cerrarRecuperacionAbandonada(repositorio: RepositorioDeRecuperacion, cerrarSesion: CerrarSesionUseCase): CerrarRecuperacionAbandonadaUseCase =
+        CerrarRecuperacionAbandonadaUseCase(repositorio, cerrarSesion)
+
+    // C-02 · §3.6: una sola preparación por proceso, antes de cualquier otra acción.
+    @Provides @Singleton
+    fun preparacionDelArranque(
+        cerrarAbandonada: CerrarRecuperacionAbandonadaUseCase,
+        reintentar: ReintentarRevocacionesPendientesUseCase,
+        monitorDeRed: MonitorDeRed,
+    ): PreparacionDelArranque = PreparacionDelArranque(cerrarAbandonada, reintentar, monitorDeRed)
 
     // C-01 · Registro, verificación del correo y aviso de privacidad.
     @Provides
