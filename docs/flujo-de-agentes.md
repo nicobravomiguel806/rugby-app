@@ -75,6 +75,20 @@ La sesión principal de Claude Code es el **orquestador**: llama a los agentes e
 
 Herramientas necesarias en la Mac: Xcode 15.4+, `brew install gitleaks postgresql@16 gradle gh xcodegen supabase/tap/supabase`, Docker Desktop u OrbStack (para `supabase start`), JDK 17 y Android Studio. XcodeGen genera el proyecto de Xcode (ADR 0004). El Android SDK se encuentra con `ANDROID_HOME` o con `android/local.properties` (`sdk.dir=…`, ignorado por git); si el shell no exporta `ANDROID_HOME`, crea ese archivo.
 
+## Modo local (mientras GitHub está suspendido)
+Desde el 2026-11-11, por decisión del PO, rige hasta que el PO avise que GitHub volvió:
+1. **Sin GitHub.** No se hace `git push`, no se usa `gh` y no se cambia el remoto.
+2. **Historias apiladas.** Cada historia nueva sale de la rama de la anterior: C-02 desde `feat/C-01-registro-de-usuario`, y así. No se fusiona nada a `main` local.
+3. **Mismo flujo de agentes:** planificador → programador → seguridad → revisor → corrector. En lugar del CI, la verificación final es `./scripts/verificar.sh --todo` en verde.
+4. **La entrega corre en `fase: local`.**
+   - Deja el contrato en «Listo para PR».
+   - Guarda el cuerpo del PR en `docs/historias/<ID>-pr.md`.
+   - Pasa la historia y su gemela a «En revisión» en Notion, con la nota «pendiente GitHub».
+   - **No** registra Done ni marca el Plan de Pruebas como ejecutado en CI.
+   - La Puerta 2 (merge) se hace cuando vuelva GitHub, con CI real.
+5. **Máximo 4 historias apiladas.** Al llegar a 4, el orquestador avisa al PO y no empieza otra.
+6. **Al volver GitHub:** se abre un PR por historia, en orden. Después de cada squash merge, la siguiente rama se rebasa sobre `main` antes de abrir su PR.
+
 ## Orden del Sprint 3 (corte en S5)
 Mitad del MVP: S0 a S5 suman **157 de 302 puntos**. Ya están en Done 12 (SP-01, SP-02, SP-03 y T-01). Quedan **145**.
 
