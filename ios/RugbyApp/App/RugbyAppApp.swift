@@ -25,10 +25,14 @@ struct RugbyAppApp: App {
                 }
                 .task { await navegacion.alArrancar() }
                 .onOpenURL { url in
-                    // C-01 · ADR 0008: el enlace del correo va a ConfirmarCorreoUseCase; lo demás es el regreso de Google.
-                    if RepositorioDeRegistroSupabase.esEnlaceDeVerificacion(url) {
+                    // ADR 0008 · C-02: cada enlace va a su flujo por esquema, host exacto y path vacío; lo demás es el
+                    // regreso de Google.
+                    if ClienteSupabase.esEnlaceDeVerificacion(url) {
                         navegacion.anotarEnlace() // H-6: antes de la tarea, para que alArrancar no pida el aviso
                         Task { await navegacion.recibirEnlace(url.absoluteString) }
+                    } else if ClienteSupabase.esEnlaceDeRecuperacion(url) {
+                        navegacion.anotarEnlace()
+                        Task { await navegacion.recibirEnlaceDeRecuperacion(url.absoluteString) }
                     } else {
                         _ = GIDSignIn.sharedInstance.handle(url)
                     }
@@ -45,11 +49,14 @@ private struct HojaDeCuenta: View {
         NavigationStack(path: $navegacion.ruta) {
             raiz.navigationDestination(for: PasoDeCuenta.self, destination: destino)
         }
-        // Sin gesto para descartar el aviso: la única salida sin aceptar es «No acepto» (CA-9).
-        .interactiveDismissDisabled(navegacion.enAviso)
+        // Sin gesto para descartar el aviso (CA-9) ni Nueva contraseña (P-7: salir es «Cancelar»).
+        .interactiveDismissDisabled(navegacion.sinGestoParaCerrar)
         .onChange(of: navegacion.registro.estado) { _, estado in navegacion.cambioEnRegistro(estado) }
         .onChange(of: navegacion.acceso.estado) { _, estado in navegacion.cambioEnAcceso(estado) }
         .onChange(of: navegacion.aviso.estado) { _, estado in Task { await navegacion.cambioEnAviso(estado) } }
+        .onChange(of: navegacion.iniciarSesion.estado) { _, estado in navegacion.cambioEnInicioDeSesion(estado) }
+        .onChange(of: navegacion.nuevaContrasena.estado) { _, estado in navegacion.cambioEnNuevaContrasena(estado) }
+        .onChange(of: navegacion.enlaceInvalido.irARecuperar) { _, ir in navegacion.cambioEnEnlaceInvalido(irARecuperar: ir) }
     }
 
     @ViewBuilder private var raiz: some View {
@@ -58,7 +65,7 @@ private struct HojaDeCuenta: View {
         } else {
             BienvenidaView(
                 crearCuenta: { navegacion.ruta.append(.registro) },
-                yaTengoCuenta: { navegacion.ruta.append(.acceso) } // Acceso de SP-04 hasta C-02 (P-10)
+                yaTengoCuenta: { navegacion.irAIniciarSesion() } // C-02 · cierra P-10 de C-01
             )
         }
     }
@@ -69,8 +76,6 @@ private struct HojaDeCuenta: View {
             RegistroView(viewModel: navegacion.registro, urlDelAviso: navegacion.urlDelAviso)
         case .verifica:
             VerificaTuCorreoView(viewModel: navegacion.registro)
-        case .acceso:
-            AccesoView(viewModel: navegacion.acceso)
         case .aviso:
             AvisoDePrivacidadView(viewModel: navegacion.aviso, urlDelAviso: navegacion.urlDelAviso)
         case .activada:
@@ -79,6 +84,16 @@ private struct HojaDeCuenta: View {
             }
         case .proximamente:
             ProximamenteView() // C-03 (P-10)
+        case .iniciarSesion:
+            IniciarSesionView(viewModel: navegacion.iniciarSesion) {
+                navegacion.irARecuperar(correo: navegacion.iniciarSesion.correo)
+            }
+        case .recuperar:
+            RecuperarContrasenaView(viewModel: navegacion.recuperar)
+        case .nuevaContrasena:
+            NuevaContrasenaView(viewModel: navegacion.nuevaContrasena)
+        case .enlaceInvalido:
+            EnlaceInvalidoView(viewModel: navegacion.enlaceInvalido)
         }
     }
 }

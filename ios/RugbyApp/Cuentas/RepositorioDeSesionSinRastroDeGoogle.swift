@@ -17,6 +17,10 @@ final class RepositorioDeSesionSinRastroDeGoogle: RepositorioDeSesion {
         try await interno.iniciarSesion(con: credencial, nonce: nonce)
     }
 
+    func iniciarSesion(correo: String, contrasena: String) async throws -> Sesion {
+        try await interno.iniciarSesion(correo: correo, contrasena: contrasena)
+    }
+
     func sesionActual() async -> Sesion? {
         await interno.sesionActual()
     }
@@ -24,9 +28,5 @@ final class RepositorioDeSesionSinRastroDeGoogle: RepositorioDeSesion {
     func borrarSesionLocal() async throws {
         await MainActor.run { GIDSignIn.sharedInstance.signOut() }
         try await interno.borrarSesionLocal()
-    }
-
-    func revocarSesionEnServidor() async throws {
-        try await interno.revocarSesionEnServidor()
     }
 }
