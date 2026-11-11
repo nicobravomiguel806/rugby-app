@@ -58,9 +58,9 @@ public final class RepositorioDeRegistroSupabase: RepositorioDeRegistro, @unchec
         }
     }
 
-    /// Solo `rugbyapp://auth-callback…` (ADR 0008). Lo demás (p. ej. el regreso de Google) no se toca.
+    /// Solo `rugbyapp://auth-callback` con path vacío (ADR 0008, C-02). Lo demás (p. ej. el regreso de Google) no se toca.
     public static func esEnlaceDeVerificacion(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == ClienteSupabase.urlDeRegreso.scheme && url.host?.lowercased() == ClienteSupabase.urlDeRegreso.host
+        ClienteSupabase.esEnlaceDeVerificacion(url)
     }
 
     static func traducir(_ error: Error) -> ErrorDeRegistro {

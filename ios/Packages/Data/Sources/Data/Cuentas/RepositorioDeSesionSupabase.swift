@@ -1,27 +1,23 @@
 // SP-04 · Sesión de Supabase a partir del ID token nativo (ADR 0006). Espejo en Android: data/.../cuentas/RepositorioDeSesionSupabase.kt.
 //
 // - iniciarSesion: signInWithIdToken con el nonce CRUDO (CP-159). Nunca recibe ni envía el hash.
-// - borrarSesionLocal: guarda en memoria el access token y borra el Keychain (sin red, P-8).
-// - revocarSesionEnServidor: POST /auth/v1/logout?scope=local con ese token (solo este dispositivo) y lo olvida.
-// Nada de esto escribe tokens en logs (AT-10).
+// - C-02 · iniciarSesion(correo:contrasena:): POST /auth/v1/token?grant_type=password. `invalid_credentials` (correo o
+//   contraseña incorrectos, AT-11) → credencialRechazada; `email_not_confirmed` → correoSinVerificar; 429 →
+//   demasiadosIntentos; sin red → sinConexion.
+// - borrarSesionLocal: borra el Keychain (sin red, P-8). C-02 · La revocación en el servidor ya no vive aquí: la hace
+//   RepositorioDeRevocacionesPendientesSupabase con el refresh token que guardó antes del borrado (ADR 0010).
+// Nada de esto escribe tokens ni contraseñas en logs (AT-10).
 import Foundation
 import Auth
 import Domain
 
 public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked Sendable {
-    private let configuracion: ConfiguracionDeSupabase
     private let almacen: any AlmacenSeguroDeSesion
-    private let fetch: ClienteSupabase.Fetch
     private let auth: AuthClient?
-
-    private let candado = NSLock()
-    private var tokenPorRevocar: String?
 
     /// C-01 · El cliente compartido de la app (ADR 0006): el mismo que usan registro y consentimiento.
     public init(cliente: ClienteSupabase) {
-        self.configuracion = cliente.configuracion
         self.almacen = cliente.almacen
-        self.fetch = cliente.fetch
         self.auth = cliente.auth
     }
 
@@ -49,41 +45,24 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
         }
     }
 
+    public func iniciarSesion(correo: String, contrasena: String) async throws -> Sesion {
+        guard let auth else { throw ErrorDeAutenticacion.configuracionIncompleta }
+        do {
+            let sesion = try await auth.signIn(email: correo, password: contrasena)
+            return Self.sesion(de: sesion.user)
+        } catch {
+            throw Self.traducir(error)
+        }
+    }
+
     public func sesionActual() async -> Sesion? {
         auth?.currentSession.map { Self.sesion(de: $0.user) }
     }
 
     public func borrarSesionLocal() async throws {
-        let token = auth?.currentSession?.accessToken
-        candado.withLock { tokenPorRevocar = token }
         do {
             try almacen.borrarTodo()
         } catch {
-            throw ErrorDeAutenticacion.desconocido
-        }
-    }
-
-    public func revocarSesionEnServidor() async throws {
-        let token: String? = candado.withLock { defer { tokenPorRevocar = nil }; return tokenPorRevocar }
-        guard let token, let urlDeAuth = configuracion.urlDeAuth else { return }
-
-        var componentes = URLComponents(url: urlDeAuth.appendingPathComponent("logout"), resolvingAgainstBaseURL: false)
-        componentes?.queryItems = [URLQueryItem(name: "scope", value: "local")]
-        guard let url = componentes?.url else { return }
-        var pedido = URLRequest(url: url)
-        pedido.httpMethod = "POST"
-        pedido.setValue(configuracion.anonKey, forHTTPHeaderField: "apikey")
-        pedido.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        let respuesta: URLResponse
-        do {
-            (_, respuesta) = try await fetch(pedido)
-        } catch {
-            throw Self.traducir(error)
-        }
-        // 401/403/404: el token ya no vale o el usuario no existe; para este dispositivo equivale a revocada.
-        let estado = (respuesta as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(estado) || [401, 403, 404].contains(estado) else {
             throw ErrorDeAutenticacion.desconocido
         }
     }
@@ -97,20 +76,24 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
         return Sesion(usuarioId: usuario.id.uuidString.lowercased(), correo: usuario.email, nombre: nombre)
     }
 
+    static func esSinConexion(_ error: URLError) -> Bool {
+        switch error.code {
+        case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost,
+             .cannotConnectToHost, .dataNotAllowed, .internationalRoamingOff, .dnsLookupFailed:
+            return true
+        default:
+            return false
+        }
+    }
+
     static func traducir(_ error: Error) -> ErrorDeAutenticacion {
         if let error = error as? ErrorDeAutenticacion { return error }
-        if let error = error as? URLError {
-            switch error.code {
-            case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost,
-                 .cannotConnectToHost, .dataNotAllowed, .internationalRoamingOff, .dnsLookupFailed:
-                return .sinConexion
-            default:
-                return .desconocido
-            }
-        }
+        if let error = error as? URLError { return esSinConexion(error) ? .sinConexion : .desconocido }
         if let error = error as? AuthError {
             switch error {
-            case let .api(_, _, _, respuesta):
+            case let .api(_, codigo, _, respuesta):
+                if respuesta.statusCode == 429 || codigo == .overRequestRateLimit { return .demasiadosIntentos }
+                if codigo == .emailNotConfirmed { return .correoSinVerificar }
                 return (400..<500).contains(respuesta.statusCode) ? .credencialRechazada : .desconocido
             case .jwtVerificationFailed, .malformedJWT, .missingExpClaim, .sessionMissing:
                 return .credencialRechazada

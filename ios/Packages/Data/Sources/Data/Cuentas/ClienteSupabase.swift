@@ -2,7 +2,8 @@
 // Sin configuración no se crea el cliente: los repositorios responden `configuracionIncompleta` y la app arranca igual.
 // C-01 · Un solo cliente por app (ADR 0006): el mismo `AuthClient` (sesión y `code_verifier` de PKCE en el mismo
 // almacén) y un `PostgrestClient` que manda el access token de ESE `AuthClient`. Lo comparten los repositorios de
-// sesión, registro y consentimiento. Espejo en Android: data/.../cuentas/ClienteSupabase.kt.
+// sesión, registro y consentimiento. C-02 · también recuperación (no revocaciones: esas no tocan el cliente compartido).
+// Espejo en Android: data/.../cuentas/ClienteSupabase.kt.
 import Foundation
 import Auth
 import PostgREST
@@ -32,6 +33,18 @@ public final class ClienteSupabase: Sendable {
 
     /// Adonde vuelve el enlace de verificación del correo (ADR 0008). Debe estar en Redirect URLs de Supabase.
     static let urlDeRegreso = URL(string: "rugbyapp://auth-callback")!
+    /// C-02 · Adonde vuelve el enlace de recuperación de contraseña (ADR 0008). También en Redirect URLs, exacta.
+    static let urlDeRecuperacion = URL(string: "rugbyapp://recuperar-contrasena")!
+
+    /// C-02 · `rugbyapp://auth-callback` con path vacío (cierra C-01 H-1): `…/auth-callback/x?code=…` no es enlace.
+    public static func esEnlaceDeVerificacion(_ url: URL) -> Bool { coincide(url, con: urlDeRegreso) }
+
+    /// C-02 · `rugbyapp://recuperar-contrasena` con path vacío. Nunca se canjea como verificación, ni al revés (C02-7).
+    public static func esEnlaceDeRecuperacion(_ url: URL) -> Bool { coincide(url, con: urlDeRecuperacion) }
+
+    private static func coincide(_ url: URL, con esperada: URL) -> Bool {
+        url.scheme?.lowercased() == esperada.scheme && url.host?.lowercased() == esperada.host && url.path.isEmpty
+    }
 
     let configuracion: ConfiguracionDeSupabase
     let almacen: any AlmacenSeguroDeSesion
