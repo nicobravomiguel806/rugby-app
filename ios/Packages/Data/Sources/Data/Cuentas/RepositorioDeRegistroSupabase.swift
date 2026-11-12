@@ -38,12 +38,12 @@ public final class RepositorioDeRegistroSupabase: RepositorioDeRegistro, @unchec
         do {
             try await auth.resend(email: correo, type: .signup, emailRedirectTo: ClienteSupabase.urlDeRegreso)
         } catch {
-            // C-02 · H-2 (CA-8, C02-8): el límite de envío de correo solo salta si la cuenta existe, así que da la
-            // respuesta neutra. Solo el límite por IP (`over_request_rate_limit`) da «Demasiados intentos».
-            if case let AuthError.api(_, _, _, respuesta) = error, respuesta.statusCode == 429,
-               !RepositorioDeRecuperacionSupabase.esLimitePorIP(error) {
-                return
-            }
+            // C-02 · H-2 y H-13 (CA-8, C02-8, AT-11): igual que `recover`. El servidor solo intenta enviar si la cuenta
+            // existe, así que cualquier respuesta suya (límite de correo, 5xx, `email_address_not_authorized`…) es
+            // neutra. Solo se distinguen la falta de red y el límite por IP (`over_request_rate_limit`).
+            if RepositorioDeRecuperacionSupabase.esLimitePorIP(error) { throw ErrorDeRegistro.demasiadosIntentos }
+            if case .sinConexion = Self.traducir(error) { throw ErrorDeRegistro.sinConexion }
+            if error is AuthError { return }
             throw Self.traducir(error)
         }
     }

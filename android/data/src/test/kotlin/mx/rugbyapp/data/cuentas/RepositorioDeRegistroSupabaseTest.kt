@@ -111,6 +111,23 @@ class RepositorioDeRegistroSupabaseTest {
         esperarError(ErrorDeRegistro.DemasiadosIntentos) { repo.reenviarVerificacion("daniela@ejemplo.mx") }
     }
 
+    /**
+     * C-02 · H-13 (CA-8, C02-8, AT-11): como en `recover`, cualquier respuesta del servidor al reenvío es neutra (un fallo
+     * del envío solo ocurre si la cuenta existe). Solo la falta de red y el límite por IP se distinguen. Mismo caso en Swift.
+     */
+    @Test fun `C02-8 H-13 reenviar con cualquier respuesta del servidor es neutro`() = runTest {
+        val servidor = ServidorFalsoDePrueba()
+        val repo = RepositorioDeRegistroSupabase(cliente(servidor))
+        servidor.responder = { respond("""{"code":500,"error_code":"unexpected_failure","msg":"Error sending confirmation email"}""", HttpStatusCode.InternalServerError, json) }
+        repo.reenviarVerificacion("daniela@ejemplo.mx")
+
+        servidor.responder = { respond("""{"code":400,"error_code":"email_address_not_authorized","msg":"Email address not authorized"}""", HttpStatusCode.BadRequest, json) }
+        repo.reenviarVerificacion("daniela@ejemplo.mx")
+
+        servidor.responder = { throw IOException("sin red") }
+        esperarError(ErrorDeRegistro.SinConexion) { repo.reenviarVerificacion("daniela@ejemplo.mx") }
+    }
+
     @Test fun `CP-160h el enlace se canjea con el code verifier de este dispositivo y guarda la sesion`() = runTest {
         val servidor = ServidorFalsoDePrueba().apply { responder = { respond(RespuestasDePrueba.usuario(), HttpStatusCode.OK, json) } }
         val almacen = AlmacenEnMemoriaDePrueba()

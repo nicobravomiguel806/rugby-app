@@ -70,13 +70,10 @@ class RepositorioDeRegistroSupabase(private val cliente: ClienteSupabase) : Repo
         } catch (e: Exception) {
             throw traducir(e)
         }
-        when {
-            // C-02 · H-2 (CA-8, C02-8): el límite de envío de correo solo salta si la cuenta existe, así que da la
-            // respuesta neutra. Solo el límite por IP (`over_request_rate_limit`) da «Demasiados intentos».
-            estado == 429 && codigoDeError(cuerpo) == "over_request_rate_limit" -> throw ErrorDeRegistro.DemasiadosIntentos
-            estado == 429 -> Unit
-            estado !in 200..299 -> throw ErrorDeRegistro.Desconocido
-        }
+        // C-02 · H-2 y H-13 (CA-8, C02-8, AT-11): igual que `recover`. El servidor solo intenta enviar si la cuenta existe,
+        // así que cualquier respuesta suya (límite de correo, 5xx, `email_address_not_authorized`…) es neutra. Solo se
+        // distinguen la falta de red (arriba) y el límite por IP (`over_request_rate_limit`).
+        if (estado == 429 && codigoDeError(cuerpo) == "over_request_rate_limit") throw ErrorDeRegistro.DemasiadosIntentos
     }
 
     override suspend fun confirmarCorreo(enlace: String): Sesion {

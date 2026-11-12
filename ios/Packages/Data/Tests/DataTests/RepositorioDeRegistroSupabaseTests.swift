@@ -99,6 +99,21 @@ final class RepositorioDeRegistroSupabaseTests: XCTestCase {
         await esperarError(.demasiadosIntentos) { try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx") }
     }
 
+    /// C-02 · H-13 (CA-8, C02-8, AT-11): como en `recover`, cualquier respuesta del servidor al reenvío es neutra (un fallo
+    /// del envío solo ocurre si la cuenta existe). Solo la falta de red y el límite por IP se distinguen. Mismo caso en Kotlin.
+    func test_C02_8_H13_reenviarConCualquierRespuestaDelServidorEsNeutro() async throws {
+        let servidor = ServidorFalsoDePrueba()
+        let repo = RepositorioDeRegistroSupabase(cliente: cliente(servidor))
+        servidor.responder = { _ in (500, Data(#"{"code":500,"error_code":"unexpected_failure","msg":"Error sending confirmation email"}"#.utf8)) }
+        try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx")
+
+        servidor.responder = { _ in (400, Data(#"{"code":400,"error_code":"email_address_not_authorized","msg":"Email address not authorized"}"#.utf8)) }
+        try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx")
+
+        servidor.responder = { _ in throw URLError(.notConnectedToInternet) }
+        await esperarError(.sinConexion) { try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx") }
+    }
+
     func test_CP160h_elEnlaceSeCanjeaConElCodeVerifierDeEsteDispositivoYGuardaLaSesion() async throws {
         let servidor = ServidorFalsoDePrueba()
         servidor.responder = { _ in (200, Data(R.usuario().utf8)) }
