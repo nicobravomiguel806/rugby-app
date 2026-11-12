@@ -163,6 +163,34 @@ class RepositorioDeRevocacionesPendientesSupabaseTest {
         assertEquals("la rotacion conserva lo que hay en el almacen (sin aviso)", entrada("rt-rotado"), m.revocaciones.entrada("p-1"))
     }
 
+    /**
+     * H-3: un 401/403 de la RPC del aviso no borra la entrada sin hacer el logout. El aviso sale de esa entrada y se sigue
+     * al logout de la sesión vieja; si el logout falla, la entrada queda con el token rotado y sin aviso, así que no se
+     * reintenta la RPC con la sesión vieja. Mismo caso en Swift.
+     */
+    @Test fun `CP-168 H-3 401 o 403 en la RPC quita el aviso de la entrada y sigue al logout`() = runTest {
+        for (estado in listOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden)) {
+            val m = Montaje()
+            m.revocaciones.poner("vieja", entrada("rt-viejo", aviso = "v0-borrador"))
+            m.servidor.responder = { pedido ->
+                when {
+                    pedido.esRefresh() -> respond(renovada("at-2", "rt-2"), HttpStatusCode.OK, RespuestasDePrueba.json)
+                    pedido.url.encodedPath.endsWith("/logout") -> respond("", HttpStatusCode.InternalServerError)
+                    else -> respond("{}", estado, RespuestasDePrueba.json)
+                }
+            }
+
+            esperarFallo { m.repo.revocar(pendiente(id = "vieja", aviso = "v0-borrador")) }
+
+            assertEquals(
+                "estado $estado",
+                listOf("/auth/v1/token?grant_type=refresh_token", "/rest/v1/rpc/revocar_aviso_de_privacidad?", "/auth/v1/logout?scope=local"),
+                rutas(m),
+            )
+            assertEquals("estado $estado", entrada("rt-2"), m.revocaciones.entrada("vieja"))
+        }
+    }
+
     @Test fun `CP-167 si el servidor dice que la sesion ya no vale se da por revocada y se borra`() = runTest {
         val respuestas = listOf(
             HttpStatusCode.Unauthorized to "{}", HttpStatusCode.Forbidden to "{}", HttpStatusCode.NotFound to "{}",

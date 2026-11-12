@@ -150,6 +150,31 @@ final class RepositorioDeRevocacionesPendientesSupabaseTests: XCTestCase {
                        "la rotación conserva lo que hay en el almacén (sin aviso)")
     }
 
+    /// H-3: un 401/403 de la RPC del aviso no borra la entrada sin hacer el logout. El aviso sale de esa entrada y se
+    /// sigue al logout de la sesión vieja; si el logout falla, la entrada queda con el token rotado y sin aviso, así que
+    /// no se reintenta la RPC con la sesión vieja. Mismo caso en Kotlin.
+    func test_CP168_H3_401o403EnLaRpcQuitaElAvisoDeLaEntradaYSigueAlLogout() async {
+        for estado in [401, 403] {
+            let m = montar()
+            m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "rt-viejo", versionDelAviso: "v0-borrador", creadaEn: 900), id: "vieja")
+            m.servidor.responder = { pedido in
+                if pedido.url!.path.hasSuffix("/token") { return (200, Self.renovada(at: "at-2", rt: "rt-2")) }
+                if pedido.url!.path.hasSuffix("/logout") { return (500, Data()) }
+                return (estado, Data("{}".utf8))
+            }
+
+            do {
+                try await m.repo.revocar(RevocacionPendiente(id: "vieja", usuarioId: usuario, versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 900))
+                XCTFail("Se esperaba el error del logout (estado \(estado))")
+            } catch {}
+
+            XCTAssertEqual(rutas(m.servidor), ["/auth/v1/token?grant_type=refresh_token", "/rest/v1/rpc/revocar_aviso_de_privacidad?",
+                                               "/auth/v1/logout?scope=local"], "estado \(estado)")
+            XCTAssertEqual(m.revocaciones.entrada("vieja"), Entrada(usuarioId: usuario, refreshToken: "rt-2", versionDelAviso: nil, creadaEn: 900),
+                           "estado \(estado)")
+        }
+    }
+
     func test_CP167_siElServidorDiceQueLaSesionYaNoValeSeDaPorRevocadaYSeBorra() async throws {
         let respuestas: [(Int, String)] = [
             (401, "{}"), (403, "{}"), (404, "{}"),

@@ -165,8 +165,9 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
                     setBody(buildJsonObject { put("p_version", version) }.toString())
                 }
             }
-            if (estadoDelAviso in setOf(401, 403)) { borrarSinFallar(pendiente.id); return }
-            if (estadoDelAviso !in 200..299) throw ErrorDeAutenticacion.Desconocido
+            // H-3: un 401/403 aquí, justo después de un refresh exitoso, no prueba que la sesión ya no valga (p. ej. un
+            // `grant` cambiado). No se borra la entrada sin el logout: el aviso sale de la entrada y se sigue al logout.
+            if (estadoDelAviso !in 200..299 && estadoDelAviso !in setOf(401, 403)) throw ErrorDeAutenticacion.Desconocido
             entrada = entrada.copy(versionDelAviso = null)
             escribir(pendiente.id, entrada)
         }

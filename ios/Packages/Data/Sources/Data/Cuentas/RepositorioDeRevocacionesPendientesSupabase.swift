@@ -141,8 +141,11 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
             let (estadoDelAviso, _) = try await enviar(Self.pedido(urlDeRest.appendingPathComponent("rpc/revocar_aviso_de_privacidad"),
                                                                    query: [:], cuerpo: ["p_version": version],
                                                                    apikey: configuracion.anonKey, token: renovada.accessToken))
-            if [401, 403].contains(estadoDelAviso) { try? almacen.borrar(id: pendiente.id); return }
-            guard (200..<300).contains(estadoDelAviso) else { throw ErrorDeAutenticacion.desconocido }
+            // H-3: un 401/403 aquí, justo después de un refresh exitoso, no prueba que la sesión ya no valga (p. ej. un
+            // `grant` cambiado). No se borra la entrada sin el logout: el aviso sale de la entrada y se sigue al logout.
+            guard (200..<300).contains(estadoDelAviso) || [401, 403].contains(estadoDelAviso) else {
+                throw ErrorDeAutenticacion.desconocido
+            }
             entrada = Entrada(usuarioId: entrada.usuarioId, refreshToken: entrada.refreshToken, versionDelAviso: nil,
                               creadaEn: entrada.creadaEn)
             try escribir(entrada, id: pendiente.id)
