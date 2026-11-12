@@ -14,14 +14,9 @@ class IniciarSesionUseCaseTest {
     private val credencial = CredencialNativa(ProveedorDeIdentidad.GOOGLE, "id-token", "access-token")
     private val bitacora = Bitacora()
     private val repositorio = RepositorioFalso(bitacora)
-    private val pendientes = RepositorioDeRevocacionesPendientesFalso()
 
     private fun casoDeUso(nonce: String = "crudo-123", obtenedor: Result<CredencialNativa> = Result.success(credencial)) =
-        IniciarSesionUseCase(
-            GeneradorFalso(nonce, bitacora), HashFalso(bitacora), ObtenedorFalso(obtenedor, bitacora), repositorio,
-            pendientes, ReintentarRevocacionesPendientesUseCase(pendientes, RelojFalso(pendientes.ahora)),
-            RepositorioDeConsentimientoFalso(),
-        )
+        IniciarSesionUseCase(GeneradorFalso(nonce, bitacora), HashFalso(bitacora), ObtenedorFalso(obtenedor, bitacora), repositorio)
 
     @Test fun `CP-158 inicio con Google devuelve la sesion del repositorio`() {
         val sesion = correr { casoDeUso().ejecutar(ProveedorDeIdentidad.GOOGLE) }

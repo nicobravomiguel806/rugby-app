@@ -1,28 +1,22 @@
 import XCTest
 @testable import Domain
 
-/// C-02 · CP-165: inicio de sesión con correo y contraseña (D-5) y la regla de las revocaciones pendientes al iniciar
-/// (P-4, ADR 0010). Reglas de domain-model.md §1. Mismos casos que
+/// C-02 · CP-165: inicio de sesión con correo y contraseña (D-5). CP-165d/e: iniciar sesión solo inicia sesión, y
+/// CP-165g/h: después, aceptar el aviso requiere conexión (ADR 0011). Reglas de domain-model.md §1. Mismos casos que
 /// android/domain/src/test/kotlin/mx/rugbyapp/domain/cuentas/IniciarSesionConCorreoUseCaseTest.kt.
 final class IniciarSesionConCorreoUseCaseTests: XCTestCase {
     private var bitacora: Bitacora!
     private var sesiones: RepositorioFalso!
-    private var pendientes: RepositorioDeRevocacionesPendientesFalso!
     private var consentimiento: RepositorioDeConsentimientoFalso!
 
     override func setUp() {
         bitacora = Bitacora()
         sesiones = RepositorioFalso(bitacora: bitacora)
-        pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora: bitacora)
-        consentimiento = RepositorioDeConsentimientoFalso(aceptadas: [AvisoDePrivacidad.versionVigente], bitacora: bitacora)
-    }
-
-    private func reintentar() -> ReintentarRevocacionesPendientesUseCase {
-        ReintentarRevocacionesPendientesUseCase(pendientes: pendientes, reloj: RelojFalso(ahora: pendientes.ahora))
+        consentimiento = RepositorioDeConsentimientoFalso(bitacora: bitacora)
     }
 
     private func casoDeUso() -> IniciarSesionConCorreoUseCase {
-        IniciarSesionConCorreoUseCase(repositorio: sesiones, pendientes: pendientes, reintentar: reintentar(), consentimiento: consentimiento)
+        IniciarSesionConCorreoUseCase(repositorio: sesiones)
     }
 
     private func esperarError(_ esperado: ErrorDeAutenticacion, _ credenciales: CredencialesDeCorreo,
@@ -57,98 +51,60 @@ final class IniciarSesionConCorreoUseCaseTests: XCTestCase {
         }
     }
 
-    func test_CP165d_antesDeIniciarReintentaLasPendientesYSiFallaElInicioSigue() async throws {
-        pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora: bitacora, guardadas: [
-            RevocacionPendiente(id: "vieja", usuarioId: "u-9", versionDelAvisoPorRevocar: nil, creadaEnSegundos: 999_000)
-        ])
-        pendientes.errorAlRevocar = .sinConexion
-
+    /// ADR 0011: iniciar sesión solo inicia sesión. No reintenta ni revoca nada y no consulta el aviso.
+    func test_CP165d_elInicioConCorreoSoloIniciaSesionSinRevocarNiConsultarElAviso() async throws {
         _ = try await casoDeUso().ejecutar(CredencialesDeCorreo(correo: "daniela@ejemplo.mx", contrasena: "clave"))
 
-        let orden = bitacora.llamadas.filter { ["revocar(vieja)", "iniciarSesionConCorreo"].contains($0) }
-        XCTAssertEqual(orden, ["revocar(vieja)", "iniciarSesionConCorreo"])
-        XCTAssertEqual(pendientes.guardadas.map(\.id), ["vieja"])
+        XCTAssertEqual(bitacora.llamadas, ["iniciarSesionConCorreo"])
     }
 
-    /// R-1 (CA-7, P-4): el reintento previo falló, pero el inicio funcionó. El aviso de la pendiente de la misma cuenta se
-    /// revoca en línea con la sesión nueva ANTES de `quitarAviso`; la pendiente conserva solo la revocación de la sesión
-    /// vieja y las de otra cuenta no cambian. Después la App consulta el aviso y lo vuelve a pedir.
-    func test_CP165e_trasIniciarElAvisoPendienteSeRevocaConLaSesionNuevaAntesDeQuitarloYLasDeOtraNoCambian() async throws {
-        let deX = RevocacionPendiente(id: "x", usuarioId: "u-1", versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 999_000)
-        let deOtra = RevocacionPendiente(id: "o", usuarioId: "u-2", versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 999_000)
-        pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora: bitacora, guardadas: [deX, deOtra])
-        pendientes.errorAlRevocar = .sinConexion
-
-        _ = try await casoDeUso().ejecutar(CredencialesDeCorreo(correo: "a@b.mx", contrasena: "clave"))
-
-        XCTAssertEqual(consentimiento.revocaciones, ["v0-borrador"], "el «No acepto» no se pierde")
-        XCTAssertFalse(consentimiento.aceptadas.contains("v0-borrador"))
-        let orden = bitacora.llamadas.filter { ["iniciarSesionConCorreo", "revocarAviso", "quitarAviso(u-1)"].contains($0) }
-        XCTAssertEqual(orden, ["iniciarSesionConCorreo", "revocarAviso", "quitarAviso(u-1)"])
-        XCTAssertEqual(pendientes.guardadas, [
-            RevocacionPendiente(id: "x", usuarioId: "u-1", versionDelAvisoPorRevocar: nil, creadaEnSegundos: 999_000),
-            deOtra
-        ], "la de u-1 conserva la revocación de la sesión vieja, sin el aviso")
-    }
-
-    func test_CP165e_conGoogleTambienRevocaElAvisoConLaSesionNuevaYLoQuitaDeLaPendiente() async throws {
-        let deX = RevocacionPendiente(id: "x", usuarioId: "u-1", versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 999_000)
-        pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora: bitacora, guardadas: [deX])
-        pendientes.errorAlRevocar = .sinConexion
+    func test_CP165e_conGoogleTambienSoloIniciaSesionSinRevocarNiConsultarElAviso() async throws {
         let google = IniciarSesionUseCase(
             generadorDeNonce: GeneradorFalso(valor: "crudo", bitacora: bitacora),
             hashDeNonce: HashFalso(bitacora: bitacora),
             obtenedor: ObtenedorFalso(resultado: .success(CredencialNativa(proveedor: .google, idToken: "t", accessToken: nil)), bitacora: bitacora),
-            repositorio: sesiones,
-            pendientes: pendientes,
-            reintentar: reintentar(),
-            consentimiento: consentimiento
+            repositorio: sesiones
         )
 
         _ = try await google.ejecutar(.google)
 
-        XCTAssertEqual(pendientes.guardadas.map(\.versionDelAvisoPorRevocar), [nil])
-        XCTAssertEqual(consentimiento.revocaciones, ["v0-borrador"])
-        let orden = bitacora.llamadas.filter { $0 == "revocar(x)" || $0.hasPrefix("obtener") || $0 == "revocarAviso" || $0 == "quitarAviso(u-1)" }
-        XCTAssertEqual(orden.first, "revocar(x)", "reintenta antes de abrir Google")
-        XCTAssertEqual(Array(orden.suffix(2)), ["revocarAviso", "quitarAviso(u-1)"])
+        XCTAssertEqual(bitacora.llamadas, ["generar", "hash(crudo)", "obtener(google,hash(crudo))", "iniciarSesion(crudo)"])
     }
 
-    /// R-1: si la revocación en línea falla y el aviso sigue aceptado, la pendiente conserva el aviso (no se pierde el
-    /// «No acepto»). Si falla pero el aviso ya no está aceptado (la respuesta se perdió), se quita igual.
-    func test_CP165g_siLaRevocacionEnLineaFallaLaPendienteConservaElAvisoSalvoQueYaNoEsteAceptado() async throws {
-        let deX = RevocacionPendiente(id: "x", usuarioId: "u-1", versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 999_000)
-        pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora: bitacora, guardadas: [deX])
-        pendientes.errorAlRevocar = .sinConexion
-        consentimiento.errorAlRevocar = .sinConexion
-
-        let sesion = try await casoDeUso().ejecutar(CredencialesDeCorreo(correo: "a@b.mx", contrasena: "clave"))
-
-        XCTAssertEqual(sesion.usuarioId, "u-1", "el inicio de sesión no falla por el aviso")
-        XCTAssertEqual(pendientes.guardadas, [deX], "sigue aceptado: la pendiente conserva el aviso")
-        XCTAssertFalse(bitacora.llamadas.contains("quitarAviso(u-1)"))
-
-        consentimiento = RepositorioDeConsentimientoFalso(aceptadas: [], bitacora: bitacora)
-        consentimiento.errorAlRevocar = .sinConexion
+    /// ADR 0011: tras iniciar sesión, «Acepto» sin red falla con el error sin transformarse; la sesión sigue iniciada,
+    /// el aviso sigue sin aceptar y no se guarda nada.
+    func test_CP165g_trasIniciarSesionAceptarSinRedFallaYLaSesionSigueIniciada() async throws {
         _ = try await casoDeUso().ejecutar(CredencialesDeCorreo(correo: "a@b.mx", contrasena: "clave"))
+        consentimiento.errorAlAceptar = .sinConexion
 
-        XCTAssertEqual(pendientes.guardadas.map(\.versionDelAvisoPorRevocar), [nil], "ya no está aceptado: se quita")
+        do {
+            try await AceptarAvisoDePrivacidadUseCase(repositorio: consentimiento).ejecutar(finalidades: [])
+            XCTFail("Se esperaba sinConexion")
+        } catch {
+            XCTAssertEqual(error as? ErrorDeConsentimiento, .sinConexion)
+        }
+        let despues = await sesiones.sesionActual()
+        XCTAssertEqual(despues, Sesion(usuarioId: "u-1", correo: "a@b.mx"))
+        XCTAssertFalse(bitacora.llamadas.contains("borrarSesionLocal"))
+        let aceptado = try await ConsultarAvisoAceptadoUseCase(repositorio: RepositorioDeConsentimientoFalso(aceptadas: consentimiento.aceptadas)).ejecutar()
+        XCTAssertFalse(aceptado)
     }
 
-    /// R-1, P-4: sin pendientes con aviso de esa cuenta no se revoca nada en línea (ni se consulta): una aceptación de la
-    /// sesión nueva nunca se toca, y tampoco el aviso de otra cuenta.
-    func test_CP165h_sinPendientesConAvisoDeEsaCuentaNoSeRevocaNingunAviso() async throws {
-        pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora: bitacora, guardadas: [
-            RevocacionPendiente(id: "x", usuarioId: "u-1", versionDelAvisoPorRevocar: nil, creadaEnSegundos: 999_000),
-            RevocacionPendiente(id: "o", usuarioId: "u-2", versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 999_000)
-        ])
-        pendientes.errorAlRevocar = .sinConexion
-
+    /// ADR 0011: «Reintentar» después del fallo repite «Acepto»: con red queda aceptado y la sesión sigue igual.
+    func test_CP165h_reintentarAceptarDespuesDelFalloAceptaElAvisoConLaMismaSesion() async throws {
         _ = try await casoDeUso().ejecutar(CredencialesDeCorreo(correo: "a@b.mx", contrasena: "clave"))
+        consentimiento.errorAlAceptar = .sinConexion
+        let aceptar = AceptarAvisoDePrivacidadUseCase(repositorio: consentimiento)
+        do { try await aceptar.ejecutar(finalidades: [.notificaciones]); XCTFail("Se esperaba sinConexion") } catch {}
 
-        XCTAssertEqual(consentimiento.revocaciones, [])
-        XCTAssertEqual(consentimiento.versionesConsultadas, [])
-        XCTAssertTrue(consentimiento.aceptadas.contains("v0-borrador"))
+        consentimiento.errorAlAceptar = nil
+        try await aceptar.ejecutar(finalidades: [.notificaciones])
+
+        XCTAssertTrue(consentimiento.aceptadas.contains(AvisoDePrivacidad.versionVigente))
+        XCTAssertEqual(consentimiento.llamadasAAceptar.count, 2)
+        let despues = await sesiones.sesionActual()
+        XCTAssertEqual(despues, Sesion(usuarioId: "u-1", correo: "a@b.mx"))
+        XCTAssertFalse(bitacora.llamadas.contains("borrarSesionLocal"))
     }
 
     func test_CP165f_laDescripcionDeLasCredencialesNoContieneLaContrasena() {

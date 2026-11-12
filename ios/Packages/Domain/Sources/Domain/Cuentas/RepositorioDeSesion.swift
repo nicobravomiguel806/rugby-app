@@ -1,5 +1,4 @@
 // SP-04 · Puerto de la sesión de Supabase. Implementación: Data/Cuentas/RepositorioDeSesionSupabase.
-// C-02 · La revocación en el servidor sale de aquí y pasa a RepositorioDeRevocacionesPendientes (ADR 0010).
 // Espejo en Android: domain/.../cuentas/RepositorioDeSesion.kt.
 
 public protocol RepositorioDeSesion: Sendable {
@@ -11,4 +10,6 @@ public protocol RepositorioDeSesion: Sendable {
     func sesionActual() async -> Sesion?
     /// Borra la sesión guardada en el dispositivo. No usa la red.
     func borrarSesionLocal() async throws
+    /// Revoca en el servidor la sesión que se acaba de borrar (solo este dispositivo).
+    func revocarSesionEnServidor() async throws
 }

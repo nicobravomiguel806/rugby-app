@@ -36,6 +36,7 @@ final class RepositorioFalso: RepositorioDeSesion, @unchecked Sendable {
     let bitacora: Bitacora
     var resultadoDeInicio: Result<Sesion, ErrorDeAutenticacion> = .success(Sesion(usuarioId: "u-1", correo: "a@b.mx"))
     var errorAlBorrar: ErrorDeAutenticacion?
+    var errorAlRevocar: ErrorDeAutenticacion?
     private(set) var guardada: Sesion?
     private(set) var credencialRecibida: CredencialNativa?
     private(set) var nonceRecibido: String?
@@ -76,75 +77,14 @@ final class RepositorioFalso: RepositorioDeSesion, @unchecked Sendable {
         if let errorAlBorrar { throw errorAlBorrar }
         guardada = nil
     }
-}
 
-// C-02 · Fakes de la cola de revocaciones pendientes (ADR 0010), del reloj y de la recuperación de contraseña.
-
-struct RelojFalso: Reloj {
-    let ahora: Int64
-    func ahoraEnSegundos() -> Int64 { ahora }
-}
-
-/// Guarda las pendientes en memoria, sin tokens. `revocar` quita la pendiente si no falla; con error, la deja.
-final class RepositorioDeRevocacionesPendientesFalso: RepositorioDeRevocacionesPendientes, @unchecked Sendable {
-    private let candado = NSLock()
-    let bitacora: Bitacora
-    var ahora: Int64
-    var errorAlGuardar: ErrorDeAutenticacion?
-    /// Error para todas las revocaciones, salvo que `erroresPorId` diga otra cosa.
-    var errorAlRevocar: ErrorDeAutenticacion?
-    var erroresPorId: [String: ErrorDeAutenticacion] = [:]
-    private var _guardadas: [RevocacionPendiente] = []
-    private(set) var revocadas: [RevocacionPendiente] = []
-    private var contador = 0
-
-    var guardadas: [RevocacionPendiente] { candado.withLock { _guardadas } }
-
-    init(bitacora: Bitacora = Bitacora(), ahora: Int64 = 1_000_000, guardadas: [RevocacionPendiente] = []) {
-        self.bitacora = bitacora
-        self.ahora = ahora
-        self._guardadas = guardadas
-    }
-
-    func guardar(para usuarioId: String, revocarAviso version: String?) async throws -> RevocacionPendiente {
-        bitacora.anotar("guardar(\(usuarioId),\(version ?? "-"))")
-        if let errorAlGuardar { throw errorAlGuardar }
-        return candado.withLock {
-            contador += 1
-            let pendiente = RevocacionPendiente(id: "p-\(contador)", usuarioId: usuarioId,
-                                                versionDelAvisoPorRevocar: version, creadaEnSegundos: ahora)
-            _guardadas.append(pendiente)
-            return pendiente
-        }
-    }
-
-    func descartar(id: String) async throws {
-        bitacora.anotar("descartar(\(id))")
-        candado.withLock { _guardadas.removeAll { $0.id == id } }
-    }
-
-    func quitarAviso(usuarioId: String) async throws {
-        bitacora.anotar("quitarAviso(\(usuarioId))")
-        candado.withLock {
-            _guardadas = _guardadas.map {
-                $0.usuarioId == usuarioId
-                    ? RevocacionPendiente(id: $0.id, usuarioId: $0.usuarioId, versionDelAvisoPorRevocar: nil, creadaEnSegundos: $0.creadaEnSegundos)
-                    : $0
-            }
-        }
-    }
-
-    func pendientes() async -> [RevocacionPendiente] {
-        candado.withLock { _guardadas }
-    }
-
-    func revocar(_ pendiente: RevocacionPendiente) async throws {
-        bitacora.anotar("revocar(\(pendiente.id))")
-        candado.withLock { revocadas.append(pendiente) }
-        if let error = erroresPorId[pendiente.id] ?? errorAlRevocar { throw error }
-        candado.withLock { _guardadas.removeAll { $0.id == pendiente.id } }
+    func revocarSesionEnServidor() async throws {
+        bitacora.anotar("revocarSesionEnServidor")
+        if let errorAlRevocar { throw errorAlRevocar }
     }
 }
+
+// C-02 · Fake de la recuperación de contraseña.
 
 final class RepositorioDeRecuperacionFalso: RepositorioDeRecuperacion, @unchecked Sendable {
     private let candado = NSLock()
@@ -206,16 +146,9 @@ final class RepositorioDeRecuperacionFalso: RepositorioDeRecuperacion, @unchecke
     }
 }
 
-/// C-02 · Arma `CerrarSesionUseCase` con sus dos puertos y el reintento, como lo compone App.
-func cerrarSesion(
-    _ sesiones: RepositorioFalso,
-    _ pendientes: RepositorioDeRevocacionesPendientesFalso = RepositorioDeRevocacionesPendientesFalso()
-) -> CerrarSesionUseCase {
-    CerrarSesionUseCase(
-        repositorio: sesiones,
-        pendientes: pendientes,
-        reintentar: ReintentarRevocacionesPendientesUseCase(pendientes: pendientes, reloj: RelojFalso(ahora: pendientes.ahora))
-    )
+/// Arma `CerrarSesionUseCase` como lo compone App.
+func cerrarSesion(_ sesiones: RepositorioFalso) -> CerrarSesionUseCase {
+    CerrarSesionUseCase(repositorio: sesiones)
 }
 
 // C-01 · Fakes de RepositorioDeRegistro y RepositorioDeConsentimiento. Cuentan las llamadas y guardan lo recibido.

@@ -79,10 +79,9 @@ class RecuperacionDeContrasenaUseCaseTest {
     @Test fun `CP-166e abandonar con recuperacion en curso cierra la sesion y quita la marca`() {
         val bitacora = Bitacora()
         val sesiones = RepositorioFalso(bitacora, Sesion("u-1", "a@b.mx"))
-        val pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora)
         val repositorio = RepositorioDeRecuperacionFalso(bitacora, enCurso = true)
 
-        correr { CerrarRecuperacionAbandonadaUseCase(repositorio, cerrarSesion(sesiones, pendientes)).ejecutar() }
+        correr { CerrarRecuperacionAbandonadaUseCase(repositorio, cerrarSesion(sesiones)).ejecutar() }
 
         assertNull(correr { sesiones.sesionActual() })
         assertFalse(correr { repositorio.recuperacionEnCurso() })

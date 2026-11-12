@@ -85,10 +85,9 @@ final class RecuperacionDeContrasenaUseCaseTests: XCTestCase {
     func test_CP166e_abandonarConRecuperacionEnCursoCierraLaSesionYQuitaLaMarca() async throws {
         let bitacora = Bitacora()
         let sesiones = RepositorioFalso(bitacora: bitacora, guardada: Sesion(usuarioId: "u-1", correo: "a@b.mx"))
-        let pendientes = RepositorioDeRevocacionesPendientesFalso(bitacora: bitacora)
         let repositorio = RepositorioDeRecuperacionFalso(bitacora: bitacora, enCurso: true)
 
-        try await CerrarRecuperacionAbandonadaUseCase(repositorio: repositorio, cerrarSesion: cerrarSesion(sesiones, pendientes)).ejecutar()
+        try await CerrarRecuperacionAbandonadaUseCase(repositorio: repositorio, cerrarSesion: cerrarSesion(sesiones)).ejecutar()
 
         let despues = await sesiones.sesionActual()
         XCTAssertNil(despues)
