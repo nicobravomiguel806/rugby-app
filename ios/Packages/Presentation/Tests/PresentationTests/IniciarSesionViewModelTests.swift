@@ -10,7 +10,8 @@ final class IniciarSesionViewModelTests: XCTestCase {
                            errorDeGoogle: ErrorDeAutenticacion? = nil) -> IniciarSesionViewModel {
         let pendientes = PendientesFalsas()
         return IniciarSesionViewModel(
-            iniciarConCorreo: IniciarSesionConCorreoUseCase(repositorio: sesiones, pendientes: pendientes, reintentar: Armar.reintentar(pendientes)),
+            iniciarConCorreo: IniciarSesionConCorreoUseCase(repositorio: sesiones, pendientes: pendientes, reintentar: Armar.reintentar(pendientes),
+                                                            consentimiento: ConsentimientoFalso()),
             iniciarConGoogle: Armar.google(sesiones, error: errorDeGoogle, pendientes: pendientes),
             reenviar: ReenviarVerificacionUseCase(repositorio: registro)
         )

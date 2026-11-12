@@ -183,14 +183,82 @@ final class RepositorioDeRevocacionesPendientesSupabaseTests: XCTestCase {
         ]
         for (estado, cuerpo) in respuestas {
             let m = montar()
+            m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "rt", versionDelAviso: nil, creadaEn: 900), id: "p-1")
+            m.servidor.responder = { _ in (estado, Data(cuerpo.utf8)) }
+
+            try await m.repo.revocar(RevocacionPendiente(id: "p-1", usuarioId: usuario, versionDelAvisoPorRevocar: nil, creadaEnSegundos: 900))
+
+            XCTAssertEqual(try m.revocaciones.ids(), [], "estado \(estado)")
+            XCTAssertEqual(m.servidor.pedidos.count, 1, "no sigue con la RPC ni el logout (estado \(estado))")
+        }
+    }
+
+    /// R-1 (CA-7): la sesión vieja ya no vale, pero la entrada todavía debía revocar el aviso. El token se borra y el aviso
+    /// queda en la misma entrada, sin token, para revocarlo con la sesión nueva en el siguiente inicio de sesión.
+    func test_CP168_R1_siLaSesionYaNoValeYHabiaAvisoQuedaSoloElAvisoSinToken() async throws {
+        let respuestas: [(Int, String)] = [
+            (401, "{}"), (403, "{}"), (404, "{}"),
+            (400, #"{"code":400,"error_code":"refresh_token_not_found","msg":"Invalid Refresh Token"}"#),
+            (400, #"{"code":"refresh_token_already_used","message":"Already Used"}"#)
+        ]
+        for (estado, cuerpo) in respuestas {
+            let m = montar()
             m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "rt", versionDelAviso: "v0-borrador", creadaEn: 900), id: "p-1")
             m.servidor.responder = { _ in (estado, Data(cuerpo.utf8)) }
 
             try await m.repo.revocar(RevocacionPendiente(id: "p-1", usuarioId: usuario, versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 900))
 
-            XCTAssertEqual(try m.revocaciones.ids(), [], "estado \(estado)")
-            XCTAssertEqual(m.servidor.pedidos.count, 1, "no sigue con la RPC ni el logout (estado \(estado))")
+            XCTAssertEqual(m.revocaciones.entrada("p-1"), Entrada(usuarioId: usuario, refreshToken: "", versionDelAviso: "v0-borrador", creadaEn: 900),
+                           "estado \(estado)")
+            XCTAssertEqual(m.servidor.pedidos.count, 1, "estado \(estado)")
         }
+    }
+
+    /// R-1 + H-3: con 401/403 en la RPC, la sesión vieja se revoca igual y el aviso pasa a una entrada solo de aviso.
+    func test_CP168_R1_tras401o403EnLaRpcLaSesionSeRevocaYElAvisoQuedaSinToken() async throws {
+        for estado in [401, 403] {
+            let m = montar() // nuevoId = "p-1"
+            m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "rt-viejo", versionDelAviso: "v0-borrador", creadaEn: 900), id: "vieja")
+            m.servidor.responder = { pedido in
+                if pedido.url!.path.hasSuffix("/token") { return (200, Self.renovada(at: "at-2", rt: "rt-2")) }
+                if pedido.url!.path.hasSuffix("/logout") { return (204, Data()) }
+                return (estado, Data("{}".utf8))
+            }
+
+            try await m.repo.revocar(RevocacionPendiente(id: "vieja", usuarioId: usuario, versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 900))
+
+            XCTAssertNil(m.revocaciones.entrada("vieja"), "estado \(estado)")
+            XCTAssertEqual(m.revocaciones.entrada("p-1"), Entrada(usuarioId: usuario, refreshToken: "", versionDelAviso: "v0-borrador", creadaEn: 900),
+                           "estado \(estado)")
+        }
+    }
+
+    /// R-1: una entrada solo de aviso no tiene credencial: `revocar` no usa la red y la deja pendiente.
+    func test_CP168_R1_unaEntradaSoloDeAvisoNoUsaLaRedYQuedaPendiente() async {
+        let m = montar()
+        m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "", versionDelAviso: "v0-borrador", creadaEn: 900), id: "p-1")
+
+        do {
+            try await m.repo.revocar(RevocacionPendiente(id: "p-1", usuarioId: usuario, versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 900))
+            XCTFail("Se esperaba un error: queda pendiente")
+        } catch {}
+
+        XCTAssertTrue(m.servidor.pedidos.isEmpty)
+        XCTAssertEqual(try m.revocaciones.ids(), ["p-1"])
+    }
+
+    /// R-1: al iniciar sesión, `quitarAviso` borra las entradas solo de aviso de esa cuenta (ya se revocó en línea).
+    func test_CP168_R1_quitarAvisoBorraLasEntradasSoloDeAvisoDeEsaCuenta() async throws {
+        let m = montar()
+        m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "", versionDelAviso: "v0-borrador", creadaEn: 900), id: "a")
+        m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "rt-a", versionDelAviso: "v0-borrador", creadaEn: 901), id: "b")
+        m.revocaciones.poner(Entrada(usuarioId: otro, refreshToken: "", versionDelAviso: "v0-borrador", creadaEn: 902), id: "c")
+
+        try await m.repo.quitarAviso(usuarioId: usuario)
+
+        XCTAssertEqual(try m.revocaciones.ids().sorted(), ["b", "c"])
+        XCTAssertEqual(m.revocaciones.entrada("b"), Entrada(usuarioId: usuario, refreshToken: "rt-a", versionDelAviso: nil, creadaEn: 901))
+        XCTAssertEqual(m.revocaciones.entrada("c")?.versionDelAviso, "v0-borrador")
     }
 
     func test_CP167_otro400Lanza_YLaEntradaSeQueda() async {

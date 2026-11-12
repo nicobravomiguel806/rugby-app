@@ -107,7 +107,7 @@ object Armar {
     fun cerrarSesion(sesiones: RepositorioDeSesion, pendientes: PendientesFalsas = PendientesFalsas()) =
         CerrarSesionUseCase(sesiones, pendientes, reintentar(pendientes))
     fun google(sesiones: RepositorioDeSesion, error: ErrorDeAutenticacion? = null, pendientes: PendientesFalsas = PendientesFalsas()) =
-        IniciarSesionUseCase(GeneradorFijo, HashFijo, GoogleFalso(error), sesiones, pendientes, reintentar(pendientes))
+        IniciarSesionUseCase(GeneradorFijo, HashFijo, GoogleFalso(error), sesiones, pendientes, reintentar(pendientes), ConsentimientoFalso())
 }
 
 object GeneradorFijo : GeneradorDeNonce { override fun generar() = "crudo" }

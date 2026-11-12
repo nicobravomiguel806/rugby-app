@@ -39,7 +39,9 @@ import mx.rugbyapp.domain.cuentas.RevocacionPendiente
  *   restaura, P-3, C02-2) y se olvidan al terminar. Si el refresh rota el token, la entrada se reescribe con el nuevo
  *   antes del paso siguiente.
  * - El servidor dice que la sesión ya no vale (401/403/404, o 400 refresh_token_not_found / refresh_token_already_used):
- *   se da por revocada y se borra la entrada. Sin red, la entrada queda.
+ *   se da por revocada y se borra la entrada. Sin red, la entrada queda. Si todavía debía revocar el aviso, queda una
+ *   entrada solo de aviso, sin token, que se resuelve en el siguiente inicio de sesión (R-1). Un 401/403 de la RPC del
+ *   aviso sigue al logout y deja el aviso en una entrada solo de aviso (H-3).
  * Nada de esto escribe tokens en logs (AT-10, C02-5).
  */
 class RepositorioDeRevocacionesPendientesSupabase internal constructor(
@@ -60,6 +62,9 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
         val creadaEn: Long,
     ) {
         override fun toString() = "Entrada(usuarioId=$usuarioId, refreshToken=***, versionDelAviso=${versionDelAviso ?: "-"})"
+
+        /** R-1: sin token, solo el aviso por revocar con la sesión nueva al siguiente inicio de sesión (ADR 0010). */
+        val esSoloDeAviso: Boolean get() = refreshToken.isEmpty()
 
         fun aJson(): String = buildJsonObject {
             put("usuarioId", usuarioId)
@@ -106,7 +111,9 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
     override suspend fun quitarAviso(usuarioId: String) {
         for (id in ids()) {
             val entrada = leer(id) ?: continue
-            if (entrada.usuarioId == usuarioId && entrada.versionDelAviso != null) escribir(id, entrada.copy(versionDelAviso = null))
+            if (entrada.usuarioId != usuarioId || entrada.versionDelAviso == null) continue
+            // R-1: una entrada solo de aviso ya se revocó con la sesión nueva; no queda nada que revocar.
+            if (entrada.esSoloDeAviso) descartar(id) else escribir(id, entrada.copy(versionDelAviso = null))
         }
     }
 
@@ -127,6 +134,8 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
         var entrada = leer(pendiente.id) ?: return // ya no está: nada que revocar
         // C02-1: el token de una cuenta nunca se usa para otra.
         if (entrada.usuarioId != pendiente.usuarioId) { borrarSinFallar(pendiente.id); return }
+        // R-1: sin credencial no hay nada que hacer en la red; el aviso espera al siguiente inicio de sesión de esa cuenta.
+        if (entrada.esSoloDeAviso) throw ErrorDeAutenticacion.Desconocido
         val base = configuracion.urlBase ?: throw ErrorDeAutenticacion.ConfiguracionIncompleta
         val apikey = configuracion.anonKey.trim()
 
@@ -139,7 +148,7 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
                 setBody(buildJsonObject { put("refresh_token", entrada.refreshToken) }.toString())
             }
         }
-        if (sesionYaNoVale(estado, cuerpo)) { borrarSinFallar(pendiente.id); return }
+        if (sesionYaNoVale(estado, cuerpo)) { darPorRevocada(pendiente.id); return }
         if (estado !in 200..299) throw ErrorDeAutenticacion.Desconocido
         val renovada = SesionRenovada.deJson(cuerpo) ?: throw ErrorDeAutenticacion.Desconocido
         if (renovada.usuarioId != null && renovada.usuarioId.lowercase() != entrada.usuarioId) {
@@ -168,6 +177,13 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
             // H-3: un 401/403 aquí, justo después de un refresh exitoso, no prueba que la sesión ya no valga (p. ej. un
             // `grant` cambiado). No se borra la entrada sin el logout: el aviso sale de la entrada y se sigue al logout.
             if (estadoDelAviso !in 200..299 && estadoDelAviso !in setOf(401, 403)) throw ErrorDeAutenticacion.Desconocido
+            if (estadoDelAviso in setOf(401, 403)) {
+                // R-1: el aviso no se pierde; pasa a una entrada solo de aviso para el siguiente inicio de sesión.
+                try {
+                    escribir(nuevoId(), Entrada(entrada.usuarioId, "", version, entrada.creadaEn))
+                } catch (_: ErrorDeAutenticacion) {
+                }
+            }
             entrada = entrada.copy(versionDelAviso = null)
             escribir(pendiente.id, entrada)
         }
@@ -185,6 +201,24 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
     }
 
     // Apoyo
+
+    /**
+     * La sesión vieja ya no vale (C-02 R-1). Si la entrada (lo que hay ahora en el almacén) todavía debía revocar el
+     * aviso, se queda solo con el aviso, sin token, para revocarlo con la sesión nueva al siguiente inicio de sesión de
+     * esa cuenta (o a los 7 días se descarta). Si no, se borra. Nunca se queda el token.
+     */
+    private suspend fun darPorRevocada(id: String) {
+        val actual = leer(id)
+        val version = actual?.versionDelAviso
+        if (actual != null && version != null) {
+            try {
+                escribir(id, actual.copy(refreshToken = "", versionDelAviso = version))
+                return
+            } catch (_: ErrorDeAutenticacion) {
+            }
+        }
+        borrarSinFallar(id)
+    }
 
     private fun almacen(): AlmacenSeguroDeSesion = cliente.almacen
 

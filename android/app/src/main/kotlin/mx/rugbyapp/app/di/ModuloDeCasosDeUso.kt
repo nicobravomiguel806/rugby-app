@@ -62,14 +62,16 @@ object ModuloDeCasosDeUso {
         repositorio: RepositorioDeSesion,
         pendientes: RepositorioDeRevocacionesPendientes,
         reintentar: ReintentarRevocacionesPendientesUseCase,
-    ): IniciarSesionUseCase = IniciarSesionUseCase(generador, hash, obtenedor, repositorio, pendientes, reintentar)
+        consentimiento: RepositorioDeConsentimiento,
+    ): IniciarSesionUseCase = IniciarSesionUseCase(generador, hash, obtenedor, repositorio, pendientes, reintentar, consentimiento)
 
     @Provides
     fun iniciarSesionConCorreo(
         repositorio: RepositorioDeSesion,
         pendientes: RepositorioDeRevocacionesPendientes,
         reintentar: ReintentarRevocacionesPendientesUseCase,
-    ): IniciarSesionConCorreoUseCase = IniciarSesionConCorreoUseCase(repositorio, pendientes, reintentar)
+        consentimiento: RepositorioDeConsentimiento,
+    ): IniciarSesionConCorreoUseCase = IniciarSesionConCorreoUseCase(repositorio, pendientes, reintentar, consentimiento)
 
     @Provides
     fun obtenerSesionActual(repositorio: RepositorioDeSesion): ObtenerSesionActualUseCase = ObtenerSesionActualUseCase(repositorio)

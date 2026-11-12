@@ -133,6 +133,7 @@ enum Armar {
     }
     static func google(_ sesiones: RepositorioDeSesion, error: ErrorDeAutenticacion? = nil, pendientes: PendientesFalsas = PendientesFalsas()) -> IniciarSesionUseCase {
         IniciarSesionUseCase(generadorDeNonce: GeneradorFijo(), hashDeNonce: HashFijo(), obtenedor: GoogleFalso(error: error),
-                             repositorio: sesiones, pendientes: pendientes, reintentar: reintentar(pendientes))
+                             repositorio: sesiones, pendientes: pendientes, reintentar: reintentar(pendientes),
+                             consentimiento: ConsentimientoFalso())
     }
 }

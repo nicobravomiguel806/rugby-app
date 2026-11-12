@@ -36,7 +36,7 @@ final class AccesoViewModelTests: XCTestCase {
             iniciarSesion: IniciarSesionUseCase(
                 generadorDeNonce: Generador(), hashDeNonce: Hash(),
                 obtenedor: Obtenedor(error: errorDeGoogle), repositorio: repositorio,
-                pendientes: pendientes, reintentar: Armar.reintentar(pendientes)
+                pendientes: pendientes, reintentar: Armar.reintentar(pendientes), consentimiento: ConsentimientoFalso()
             ),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: repositorio),
             cerrarSesion: Armar.cerrarSesion(repositorio, pendientes)

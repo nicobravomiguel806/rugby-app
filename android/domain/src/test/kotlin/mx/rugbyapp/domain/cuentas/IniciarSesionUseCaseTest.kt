@@ -20,6 +20,7 @@ class IniciarSesionUseCaseTest {
         IniciarSesionUseCase(
             GeneradorFalso(nonce, bitacora), HashFalso(bitacora), ObtenedorFalso(obtenedor, bitacora), repositorio,
             pendientes, ReintentarRevocacionesPendientesUseCase(pendientes, RelojFalso(pendientes.ahora)),
+            RepositorioDeConsentimientoFalso(),
         )
 
     @Test fun `CP-158 inicio con Google devuelve la sesion del repositorio`() {

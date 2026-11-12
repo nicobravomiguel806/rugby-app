@@ -9,7 +9,9 @@
 //   sesión (nunca restaura, P-3, C02-2) y se olvidan al terminar. Si el refresh rota el token, la entrada se reescribe
 //   con el nuevo antes del paso siguiente.
 // - El servidor dice que la sesión ya no vale (401/403/404, o 400 refresh_token_not_found / refresh_token_already_used):
-//   se da por revocada y se borra la entrada. Sin red, la entrada queda.
+//   se da por revocada y se borra la entrada. Sin red, la entrada queda. Si todavía debía revocar el aviso, queda una
+//   entrada solo de aviso, sin token, que se resuelve en el siguiente inicio de sesión (R-1). Un 401/403 de la RPC del
+//   aviso sigue al logout y deja el aviso en una entrada solo de aviso (H-3).
 // Nada de esto escribe tokens en logs (AT-10, C02-5).
 import Foundation
 import Auth
@@ -24,6 +26,8 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
         let creadaEn: Int64
 
         var description: String { "Entrada(usuarioId: \(usuarioId), refreshToken: ***, versionDelAviso: \(versionDelAviso ?? "-"))" }
+        /// R-1: sin token, solo el aviso por revocar con la sesión nueva al siguiente inicio de sesión (ADR 0010).
+        var esSoloDeAviso: Bool { refreshToken.isEmpty }
     }
 
     /// Respuesta mínima del refresh.
@@ -90,6 +94,10 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
     public func quitarAviso(usuarioId: String) async throws {
         for id in try idsGuardados() {
             guard let entrada = leer(id: id), entrada.usuarioId == usuarioId, entrada.versionDelAviso != nil else { continue }
+            if entrada.esSoloDeAviso { // R-1: ya se revocó con la sesión nueva; no queda nada que revocar
+                try await descartar(id: id)
+                continue
+            }
             try escribir(Entrada(usuarioId: entrada.usuarioId, refreshToken: entrada.refreshToken, versionDelAviso: nil,
                                  creadaEn: entrada.creadaEn), id: id)
         }
@@ -108,6 +116,8 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
         guard var entrada = leer(id: pendiente.id) else { return } // ya no está: nada que revocar
         // C02-1: el token de una cuenta nunca se usa para otra.
         guard entrada.usuarioId == pendiente.usuarioId else { try? almacen.borrar(id: pendiente.id); return }
+        // R-1: sin credencial no hay nada que hacer en la red; el aviso espera al siguiente inicio de sesión de esa cuenta.
+        guard !entrada.esSoloDeAviso else { throw ErrorDeAutenticacion.desconocido }
         guard let urlDeAuth = configuracion.urlDeAuth, let urlDeRest = configuracion.urlDeRest else {
             throw ErrorDeAutenticacion.configuracionIncompleta
         }
@@ -117,7 +127,7 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
                                                             query: ["grant_type": "refresh_token"],
                                                             cuerpo: ["refresh_token": entrada.refreshToken],
                                                             apikey: configuracion.anonKey, token: nil))
-        if Self.sesionYaNoVale(estado, cuerpo) { try? almacen.borrar(id: pendiente.id); return }
+        if Self.sesionYaNoVale(estado, cuerpo) { darPorRevocada(id: pendiente.id); return }
         guard (200..<300).contains(estado),
               let renovada = try? JSONDecoder().decode(SesionRenovada.self, from: cuerpo) else {
             throw ErrorDeAutenticacion.desconocido
@@ -146,6 +156,11 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
             guard (200..<300).contains(estadoDelAviso) || [401, 403].contains(estadoDelAviso) else {
                 throw ErrorDeAutenticacion.desconocido
             }
+            if [401, 403].contains(estadoDelAviso) {
+                // R-1: el aviso no se pierde; pasa a una entrada solo de aviso para el siguiente inicio de sesión.
+                try? escribir(Entrada(usuarioId: entrada.usuarioId, refreshToken: "", versionDelAviso: version,
+                                      creadaEn: entrada.creadaEn), id: nuevoId())
+            }
             entrada = Entrada(usuarioId: entrada.usuarioId, refreshToken: entrada.refreshToken, versionDelAviso: nil,
                               creadaEn: entrada.creadaEn)
             try escribir(entrada, id: pendiente.id)
@@ -162,6 +177,19 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
     }
 
     // MARK: - Apoyo
+
+    /// La sesión vieja ya no vale (C-02 R-1). Si la entrada (lo que hay ahora en el almacén) todavía debía revocar el
+    /// aviso, se queda solo con el aviso, sin token, para revocarlo con la sesión nueva al siguiente inicio de sesión de
+    /// esa cuenta (o a los 7 días se descarta). Si no, se borra. Nunca se queda el token.
+    private func darPorRevocada(id: String) {
+        if let actual = leer(id: id), let version = actual.versionDelAviso {
+            do {
+                try escribir(Entrada(usuarioId: actual.usuarioId, refreshToken: "", versionDelAviso: version, creadaEn: actual.creadaEn), id: id)
+                return
+            } catch {}
+        }
+        try? almacen.borrar(id: id)
+    }
 
     private func idsGuardados() throws -> [String] {
         do { return try almacen.ids() } catch { throw ErrorDeAutenticacion.desconocido }

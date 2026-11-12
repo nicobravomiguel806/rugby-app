@@ -199,14 +199,81 @@ class RepositorioDeRevocacionesPendientesSupabaseTest {
         )
         for ((estado, cuerpo) in respuestas) {
             val m = Montaje()
+            m.revocaciones.poner("p-1", entrada("rt"))
+            m.servidor.responder = { respond(cuerpo, estado, RespuestasDePrueba.json) }
+
+            m.repo.revocar(pendiente())
+
+            assertTrue("estado $estado", m.revocaciones.ids().isEmpty())
+            assertEquals("no sigue con la RPC ni el logout (estado $estado)", 1, m.servidor.pedidos.size)
+        }
+    }
+
+    /**
+     * R-1 (CA-7): la sesión vieja ya no vale, pero la entrada todavía debía revocar el aviso. El token se borra y el aviso
+     * queda en la misma entrada, sin token, para revocarlo con la sesión nueva en el siguiente inicio de sesión.
+     */
+    @Test fun `CP-168 R-1 si la sesion ya no vale y habia aviso queda solo el aviso sin token`() = runTest {
+        val respuestas = listOf(
+            HttpStatusCode.Unauthorized to "{}", HttpStatusCode.Forbidden to "{}", HttpStatusCode.NotFound to "{}",
+            HttpStatusCode.BadRequest to """{"code":400,"error_code":"refresh_token_not_found","msg":"Invalid Refresh Token"}""",
+            HttpStatusCode.BadRequest to """{"code":"refresh_token_already_used","message":"Already Used"}""",
+        )
+        for ((estado, cuerpo) in respuestas) {
+            val m = Montaje()
             m.revocaciones.poner("p-1", entrada("rt", "v0-borrador"))
             m.servidor.responder = { respond(cuerpo, estado, RespuestasDePrueba.json) }
 
             m.repo.revocar(pendiente(aviso = "v0-borrador"))
 
-            assertTrue("estado $estado", m.revocaciones.ids().isEmpty())
-            assertEquals("no sigue con la RPC ni el logout (estado $estado)", 1, m.servidor.pedidos.size)
+            assertEquals("estado $estado", entrada("", "v0-borrador"), m.revocaciones.entrada("p-1"))
+            assertEquals("estado $estado", 1, m.servidor.pedidos.size)
         }
+    }
+
+    /** R-1 + H-3: con 401/403 en la RPC, la sesión vieja se revoca igual y el aviso pasa a una entrada solo de aviso. */
+    @Test fun `CP-168 R-1 tras 401 o 403 en la RPC la sesion se revoca y el aviso queda sin token`() = runTest {
+        for (estado in listOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden)) {
+            val m = Montaje() // nuevoId = "p-1"
+            m.revocaciones.poner("vieja", entrada("rt-viejo", aviso = "v0-borrador"))
+            m.servidor.responder = { pedido ->
+                when {
+                    pedido.esRefresh() -> respond(renovada("at-2", "rt-2"), HttpStatusCode.OK, RespuestasDePrueba.json)
+                    pedido.url.encodedPath.endsWith("/logout") -> respond("", HttpStatusCode.NoContent)
+                    else -> respond("{}", estado, RespuestasDePrueba.json)
+                }
+            }
+
+            m.repo.revocar(pendiente(id = "vieja", aviso = "v0-borrador"))
+
+            assertNull("estado $estado", m.revocaciones.entrada("vieja"))
+            assertEquals("estado $estado", entrada("", "v0-borrador"), m.revocaciones.entrada("p-1"))
+        }
+    }
+
+    /** R-1: una entrada solo de aviso no tiene credencial: `revocar` no usa la red y la deja pendiente. */
+    @Test fun `CP-168 R-1 una entrada solo de aviso no usa la red y queda pendiente`() = runTest {
+        val m = Montaje()
+        m.revocaciones.poner("p-1", entrada("", "v0-borrador"))
+
+        esperarFallo { m.repo.revocar(pendiente(aviso = "v0-borrador")) }
+
+        assertTrue(m.servidor.pedidos.isEmpty())
+        assertEquals(listOf("p-1"), m.revocaciones.ids())
+    }
+
+    /** R-1: al iniciar sesión, `quitarAviso` borra las entradas solo de aviso de esa cuenta (ya se revocó en línea). */
+    @Test fun `CP-168 R-1 quitar aviso borra las entradas solo de aviso de esa cuenta`() = runTest {
+        val m = Montaje()
+        m.revocaciones.poner("a", entrada("", "v0-borrador"))
+        m.revocaciones.poner("b", entrada("rt-a", "v0-borrador", creada = 901))
+        m.revocaciones.poner("c", entrada("", "v0-borrador", de = otro, creada = 902))
+
+        m.repo.quitarAviso(usuario)
+
+        assertEquals(listOf("b", "c"), m.revocaciones.ids().sorted())
+        assertEquals(entrada("rt-a", creada = 901), m.revocaciones.entrada("b"))
+        assertEquals("v0-borrador", m.revocaciones.entrada("c")?.versionDelAviso)
     }
 
     @Test fun `CP-167 otro 400 lanza y la entrada se queda`() = runTest {

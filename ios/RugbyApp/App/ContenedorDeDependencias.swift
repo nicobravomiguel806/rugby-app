@@ -63,7 +63,8 @@ final class ContenedorDeDependencias {
         let reintentar = ReintentarRevocacionesPendientesUseCase(pendientes: repositorioDeRevocaciones, reloj: reloj)
         let cerrarSesion = CerrarSesionUseCase(repositorio: repositorioDeSesion, pendientes: repositorioDeRevocaciones, reintentar: reintentar)
         accesoViewModel = AccesoViewModel(
-            iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentar),
+            iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentar,
+                                              repositorioDeConsentimiento),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: repositorioDeSesion),
             cerrarSesion: cerrarSesion
         )
@@ -79,7 +80,8 @@ final class ContenedorDeDependencias {
         _ obtenedor: ObtenedorDeCredencial,
         _ repositorio: RepositorioDeSesion,
         _ pendientes: RepositorioDeRevocacionesPendientes,
-        _ reintentar: ReintentarRevocacionesPendientesUseCase
+        _ reintentar: ReintentarRevocacionesPendientesUseCase,
+        _ consentimiento: RepositorioDeConsentimiento
     ) -> IniciarSesionUseCase {
         IniciarSesionUseCase(
             generadorDeNonce: GeneradorDeNonceSeguro(),
@@ -87,7 +89,8 @@ final class ContenedorDeDependencias {
             obtenedor: obtenedor,
             repositorio: repositorio,
             pendientes: pendientes,
-            reintentar: reintentar
+            reintentar: reintentar,
+            consentimiento: consentimiento
         )
     }
 
@@ -141,16 +144,19 @@ final class ContenedorDeDependencias {
             reenviar: ReenviarVerificacionUseCase(repositorio: repositorioDeRegistro),
             confirmarCorreo: ConfirmarCorreoUseCase(repositorio: repositorioDeRegistro),
             aceptarAviso: AceptarAvisoDePrivacidadUseCase(repositorio: repositorioDeConsentimiento),
-            iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentarRevocaciones)
+            iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentarRevocaciones,
+                                              repositorioDeConsentimiento)
         )
     }
 
     func iniciarSesionViewModel() -> IniciarSesionViewModel {
         IniciarSesionViewModel(
             iniciarConCorreo: IniciarSesionConCorreoUseCase(
-                repositorio: repositorioDeSesion, pendientes: repositorioDeRevocaciones, reintentar: reintentarRevocaciones
+                repositorio: repositorioDeSesion, pendientes: repositorioDeRevocaciones, reintentar: reintentarRevocaciones,
+                consentimiento: repositorioDeConsentimiento
             ),
-            iniciarConGoogle: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentarRevocaciones),
+            iniciarConGoogle: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentarRevocaciones,
+                                              repositorioDeConsentimiento),
             reenviar: ReenviarVerificacionUseCase(repositorio: repositorioDeRegistro)
         )
     }

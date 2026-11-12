@@ -55,6 +55,7 @@ class AccesoViewModelTest {
             repositorio,
             pendientes,
             Armar.reintentar(pendientes),
+            ConsentimientoFalso(),
         ),
         ObtenerSesionActualUseCase(repositorio),
         Armar.cerrarSesion(repositorio, pendientes),

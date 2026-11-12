@@ -25,7 +25,8 @@ final class IniciarSesionUseCaseTests: XCTestCase {
             obtenedor: ObtenedorFalso(resultado: obtenedor ?? .success(credencial), bitacora: bitacora),
             repositorio: repositorio,
             pendientes: pendientes,
-            reintentar: ReintentarRevocacionesPendientesUseCase(pendientes: pendientes, reloj: RelojFalso(ahora: pendientes.ahora))
+            reintentar: ReintentarRevocacionesPendientesUseCase(pendientes: pendientes, reloj: RelojFalso(ahora: pendientes.ahora)),
+            consentimiento: RepositorioDeConsentimientoFalso()
         )
     }
 
