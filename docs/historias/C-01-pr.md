@@ -1,13 +1,10 @@
 # feat(C-01): registro con correo o Google y aviso de privacidad en servidor (+AN-C-01)
 
-> **Modo local (2026-11-11).** GitHub está suspendido. Este es el cuerpo del PR, listo para pegar con
-> `gh pr create --base main` cuando el PO avise que GitHub volvió. El PR se abre entonces con el CI real
-> (la Puerta 2, el merge, se decide ahí). **C-02 va apilada encima** de `feat/C-01-registro-de-usuario`.
-> Después del squash merge de C-01, la rama de C-02 se rebasa sobre `main` antes de abrir su PR.
+> Cuerpo publicado en el [PR #10](https://github.com/nicobravomiguel806/rugby-app/pull/10) (2026-11-12).
 
 ## Historia
 - **C-01 · Registro de usuario** · [Notion](https://app.notion.com/p/404a4935d14681c58700ef4e91682534) · gemela **AN-C-01** · [Notion](https://app.notion.com/p/404a4935d14681d9b683f9b206725a2b)
-- Contrato: [`docs/historias/C-01.md`](./C-01.md) · Rama: `feat/C-01-registro-de-usuario` · Carril completo · 5 + 5 pts
+- Contrato: [`docs/historias/C-01.md`](https://github.com/nicobravomiguel806/rugby-app/blob/feat/C-01-registro-de-usuario/docs/historias/C-01.md) · Rama: `feat/C-01-registro-de-usuario` · Carril completo · 5 + 5 pts
 - Requisitos: RF-01, RNF-10 · Épica EP-01 · v1.0 MVP
 
 Una persona se registra con su correo (enlace de verificación con PKCE) o con Google, y acepta el aviso de
@@ -68,9 +65,9 @@ se cierra la sesión y no se guarda nada (CA-9). Apple queda para SP-07.
 La Redirect URL `rugbyapp://auth-callback` ya está configurada en Supabase dev (el PO la agregó el 6 nov 2026).
 
 ## Pruebas y casos cubiertos
-`./scripts/verificar.sh --todo` en verde el 2026-11-11 (sustituye al CI mientras GitHub está suspendido):
+`./scripts/verificar.sh --todo` en verde el 2026-11-12 sobre `7cacf43` (rama al día con `main`, sin rebase), con el emulador Pixel_8 (API 37) para las instrumentadas. El resultado del CI está en los checks de este PR.
 
-| Job | Resultado |
+| Job | Resultado local |
 |---|---|
 | architecture-guard | ✅ (los casos de uso nuevos existen en Swift y en Kotlin) |
 | secrets-scan (gitleaks) | ✅ |
@@ -78,7 +75,7 @@ La Redirect URL `rugbyapp://auth-callback` ya está configurada en Supabase dev 
 | ios-domain | ✅ 54 tests |
 | ios-app | ✅ Data 28 · Presentation 27 · RugbyAppTests 4 · UITests 3 |
 | android-domain | ✅ (54 tests, mismos ID que iOS) |
-| android-app | ✅ assembleDebug + unitarias (data 29, presentation 31). Las 12 instrumentadas **no corrieron** en esta pasada porque no había emulador; pasaron en las revisiones del 2026-11-07 (Pixel_8) y corren en el CI (API 29) |
+| android-app | ✅ assembleDebug + unitarias + **12 instrumentadas** en Pixel_8 |
 
 | CP | Qué cubre | Dónde | Estado |
 |---|---|---|---|
@@ -140,6 +137,7 @@ Sin bloqueantes abiertos. Veredicto del revisor (ronda 2): **Limpio**. Seguridad
 - **Android:** sin `gradle.lockfile` ni `verification-metadata.xml` (AT-16, pendiente desde SP-04 H-5).
 
 ## Nota de entrega
-- El PR **todavía no está abierto**: GitHub está suspendido (modo local, `docs/flujo-de-agentes.md` § «Modo local»). Se abrirá cuando vuelva GitHub, con el CI real, y el merge requiere la aprobación del PO (Puerta 2).
-- **C-02 va apilada encima de esta rama.** Se fusiona primero C-01 (squash) y después se rebasa C-02 sobre `main`.
-- En Notion, C-01 y AN-C-01 están en «En revisión» con la nota «pendiente GitHub». Hasta el merge no se marca Done ni se registra el Plan de Pruebas.
+- El merge requiere la aprobación del PO (Puerta 2). No se fusiona con el CI en rojo.
+- **C-02 va apilada encima de esta rama.** Se fusiona primero C-01 (squash) y después se rebasa C-02 sobre `main` antes de abrir su PR.
+- En Notion, C-01 y AN-C-01 siguen en «En revisión» con el enlace de este PR. Hasta el merge no se marca Done ni se registra el Plan de Pruebas.
+
