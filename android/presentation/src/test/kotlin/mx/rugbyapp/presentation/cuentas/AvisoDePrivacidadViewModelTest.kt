@@ -107,15 +107,55 @@ class AvisoDePrivacidadViewModelTest {
         assertNull(sesiones.guardada)
     }
 
-    @Test fun `CP-164g si la revocacion falla la sesion se cierra y sale del aviso`() {
+    // C-02 · ADR 0011 (reescribe CP-164g): si la revocación falla, la sesión NO se cierra y se queda en el aviso.
+    @Test fun `CP-164g si la revocacion falla se queda en el aviso con la sesion y reintentar`() {
         val consentimiento = ConsentimientoFalso().apply { aceptado = true; errorAlRevocar = ErrorDeConsentimiento.SinConexion }
         val sesiones = SesionFalsa(sesion)
         val vm = viewModel(consentimiento, sesiones)
 
         vm.rechazar()
 
-        assertEquals("la sesion ya se cerro: no se deja a la persona en el aviso", EstadoDelAviso.Rechazado, vm.estado.value)
+        assertEquals(EstadoDelAviso.NoRegistrado(DecisionDelAviso.RECHAZAR), vm.estado.value)
+        assertEquals("la sesion no se cierra", sesion, sesiones.guardada)
+        assertEquals(0, sesiones.borrados)
+        assertEquals("No pudimos registrar tu decisión. Revisa tu conexión", TEXTO_NO_REGISTRADO)
+    }
+
+    // C-02 · CP-168c: «Reintentar» después del fallo repite el «No acepto»; con red, revoca, cierra y sale del aviso.
+    @Test fun `CP-168c reintentar repite el no acepto y con red sale del aviso`() {
+        val consentimiento = ConsentimientoFalso().apply { aceptado = true; errorAlConsultar = ErrorDeConsentimiento.SinConexion }
+        val sesiones = SesionFalsa(sesion)
+        val vm = viewModel(consentimiento, sesiones)
+        vm.rechazar()
+        assertEquals(EstadoDelAviso.NoRegistrado(DecisionDelAviso.RECHAZAR), vm.estado.value)
+
+        consentimiento.errorAlConsultar = null
+        vm.reintentar()
+
+        assertEquals(EstadoDelAviso.Rechazado, vm.estado.value)
+        assertEquals(1, consentimiento.revocaciones)
         assertNull(sesiones.guardada)
+    }
+
+    // C-02 · CP-165g/h: «Acepto» sin red se queda en el aviso con «Reintentar» (sesión intacta); «Reintentar» lo repite.
+    @Test fun `CP-165g aceptar sin red se queda en el aviso y reintentar acepta`() {
+        val consentimiento = ConsentimientoFalso().apply { errorAlAceptar = ErrorDeConsentimiento.SinConexion }
+        val sesiones = SesionFalsa(sesion)
+        val vm = viewModel(consentimiento, sesiones)
+        vm.cambiarAviso(true)
+        vm.alternar(FinalidadSecundaria.NOTIFICACIONES)
+
+        vm.aceptarYContinuar()
+
+        assertEquals(EstadoDelAviso.NoRegistrado(DecisionDelAviso.ACEPTAR), vm.estado.value)
+        assertEquals(sesion, sesiones.guardada)
+
+        consentimiento.errorAlAceptar = null
+        vm.reintentar()
+
+        assertEquals(EstadoDelAviso.Aceptado, vm.estado.value)
+        assertEquals(listOf(setOf(FinalidadSecundaria.NOTIFICACIONES), setOf(FinalidadSecundaria.NOTIFICACIONES)), consentimiento.aceptaciones)
+        assertEquals(sesion, sesiones.guardada)
     }
 
     @Test fun `CP-164d con sesion y sin aviso hay que pedirlo`() = runTest {

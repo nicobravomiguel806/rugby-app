@@ -3,8 +3,6 @@
 
     <!-- SP-04 · H-21: sin este permiso OkHttp lanza SecurityException y la app se cierra al iniciar sesión. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- C-02 · CA-4 (ADR 0010): saber cuándo vuelve la red para reintentar las revocaciones pendientes. -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- AT-12: sin tráfico en claro, ni en el manifiesto ni en la configuración de red.
          SP-04 · CA-2 / AT-17: sin respaldo del sistema. allowBackup="false" no frena la transferencia entre equipos en

@@ -5,6 +5,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import mx.rugbyapp.domain.cuentas.CerrarSesionUseCase
 import mx.rugbyapp.domain.cuentas.CredencialNativa
 import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
 import mx.rugbyapp.domain.cuentas.GeneradorDeNonce
@@ -45,6 +46,7 @@ class AccesoViewModelTest {
         override suspend fun sesionActual() = guardada
         override suspend fun iniciarSesion(correo: String, contrasena: String): Sesion = throw ErrorDeAutenticacion.CredencialRechazada
         override suspend fun borrarSesionLocal() { guardada = null }
+        override suspend fun revocarSesionEnServidor() { throw ErrorDeAutenticacion.SinConexion }
     }
 
     private fun viewModel(repositorio: Repositorio, errorDeGoogle: ErrorDeAutenticacion? = null) = AccesoViewModel(
@@ -53,15 +55,10 @@ class AccesoViewModelTest {
             object : HashDeNonce { override fun sha256Hex(nonce: String) = "hash" },
             Obtenedor(errorDeGoogle),
             repositorio,
-            pendientes,
-            Armar.reintentar(pendientes),
-            ConsentimientoFalso(),
         ),
         ObtenerSesionActualUseCase(repositorio),
-        Armar.cerrarSesion(repositorio, pendientes),
+        CerrarSesionUseCase(repositorio),
     )
-
-    private val pendientes = PendientesFalsas()
 
     @Test fun `CP-154 cargar con sesion guardada publica con sesion`() {
         val sesion = Sesion("u-1", null)

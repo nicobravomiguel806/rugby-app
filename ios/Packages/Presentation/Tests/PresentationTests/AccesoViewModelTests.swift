@@ -28,18 +28,17 @@ final class AccesoViewModelTests: XCTestCase {
         func sesionActual() async -> Sesion? { guardada }
         func iniciarSesion(correo: String, contrasena: String) async throws -> Sesion { throw ErrorDeAutenticacion.credencialRechazada }
         func borrarSesionLocal() async throws { guardada = nil }
+        func revocarSesionEnServidor() async throws { throw ErrorDeAutenticacion.sinConexion }
     }
 
     private func viewModel(_ repositorio: Repositorio, errorDeGoogle: ErrorDeAutenticacion? = nil) -> AccesoViewModel {
-        let pendientes = PendientesFalsas()
-        return AccesoViewModel(
+        AccesoViewModel(
             iniciarSesion: IniciarSesionUseCase(
                 generadorDeNonce: Generador(), hashDeNonce: Hash(),
-                obtenedor: Obtenedor(error: errorDeGoogle), repositorio: repositorio,
-                pendientes: pendientes, reintentar: Armar.reintentar(pendientes), consentimiento: ConsentimientoFalso()
+                obtenedor: Obtenedor(error: errorDeGoogle), repositorio: repositorio
             ),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: repositorio),
-            cerrarSesion: Armar.cerrarSesion(repositorio, pendientes)
+            cerrarSesion: CerrarSesionUseCase(repositorio: repositorio)
         )
     }
 

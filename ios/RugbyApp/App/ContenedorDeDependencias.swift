@@ -7,21 +7,18 @@ import Presentation
 /// Inyección manual por constructor: Data → caso de uso → ViewModel. Espejo en Android: app/di/.
 /// SP-04: `@MainActor` porque guarda el AccesoViewModel (una sola sesión para toda la app).
 /// C-01: también el AvisoDePrivacidadViewModel y la URL del aviso.
-/// C-02: revocaciones pendientes (ADR 0010), recuperación de contraseña y el monitor de red.
+/// C-02: inicio con correo y recuperación de contraseña (sin revocaciones pendientes, ADR 0011).
 @MainActor
 final class ContenedorDeDependencias {
-    /// C-02 · Tope del reintento al arrancar (P-4): sin red, la app no se bloquea más de 10 s.
-    static let topeDelReintentoAlArrancar: Duration = .seconds(10)
+    /// C-02 · Tope del arranque (R-2): sin red, cerrar la recuperación abandonada no bloquea más de 10 s.
+    static let topeDelArranque: Duration = .seconds(10)
 
     private let repositorioDeReglas: RepositorioDeReglas = RepositorioDeReglasPorDefecto()
     private let repositorioDeSesion: RepositorioDeSesion
     private let repositorioDeRegistro: RepositorioDeRegistro
     private let repositorioDeConsentimiento: RepositorioDeConsentimiento
-    private let repositorioDeRevocaciones: RepositorioDeRevocacionesPendientes
     private let repositorioDeRecuperacion: RepositorioDeRecuperacion
     private let obtenedorDeGoogle: ObtenedorDeCredencial
-    private let reloj: Reloj = RelojDelSistema()
-    private let monitorDeRed = MonitorDeRed()
     let accesoViewModel: AccesoViewModel
     let avisoViewModel: AvisoDePrivacidadViewModel
     /// C-01 · P-5: `nil` mientras no exista la URL pública del aviso (el enlace se muestra deshabilitado).
@@ -47,12 +44,6 @@ final class ContenedorDeDependencias {
         repositorioDeSesion = RepositorioDeSesionSinRastroDeGoogle(RepositorioDeSesionSupabase(cliente: cliente))
         repositorioDeRegistro = RepositorioDeRegistroSupabase(cliente: cliente)
         repositorioDeConsentimiento = RepositorioDeConsentimientoSupabase(cliente: cliente)
-        // C-02 · ADR 0010: otro servicio del Keychain, que el cierre de sesión no borra.
-        repositorioDeRevocaciones = RepositorioDeRevocacionesPendientesSupabase(
-            cliente: cliente,
-            almacen: AlmacenDeRevocacionesKeychain(servicio: "\(bundleID).revocaciones"),
-            reloj: reloj
-        )
         repositorioDeRecuperacion = RepositorioDeRecuperacionSupabase(cliente: cliente)
         obtenedorDeGoogle = ObtenedorDeCredencialGoogle(
             clientID: valor("GIDClientID"),
@@ -60,11 +51,9 @@ final class ContenedorDeDependencias {
             esquemaDeURL: esquemaDeGoogle
         )
         urlDelAviso = URL(string: valor("AvisoDePrivacidadURL")).flatMap { $0.scheme == "https" ? $0 : nil }
-        let reintentar = ReintentarRevocacionesPendientesUseCase(pendientes: repositorioDeRevocaciones, reloj: reloj)
-        let cerrarSesion = CerrarSesionUseCase(repositorio: repositorioDeSesion, pendientes: repositorioDeRevocaciones, reintentar: reintentar)
+        let cerrarSesion = CerrarSesionUseCase(repositorio: repositorioDeSesion)
         accesoViewModel = AccesoViewModel(
-            iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentar,
-                                              repositorioDeConsentimiento),
+            iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: repositorioDeSesion),
             cerrarSesion: cerrarSesion
         )
@@ -78,19 +67,13 @@ final class ContenedorDeDependencias {
 
     private static func iniciarSesion(
         _ obtenedor: ObtenedorDeCredencial,
-        _ repositorio: RepositorioDeSesion,
-        _ pendientes: RepositorioDeRevocacionesPendientes,
-        _ reintentar: ReintentarRevocacionesPendientesUseCase,
-        _ consentimiento: RepositorioDeConsentimiento
+        _ repositorio: RepositorioDeSesion
     ) -> IniciarSesionUseCase {
         IniciarSesionUseCase(
             generadorDeNonce: GeneradorDeNonceSeguro(),
             hashDeNonce: HashDeNonceSHA256(),
             obtenedor: obtenedor,
-            repositorio: repositorio,
-            pendientes: pendientes,
-            reintentar: reintentar,
-            consentimiento: consentimiento
+            repositorio: repositorio
         )
     }
 
@@ -114,24 +97,14 @@ final class ContenedorDeDependencias {
         )
     }
 
-    // MARK: - C-02 · Revocaciones pendientes y recuperación
-
-    var reintentarRevocaciones: ReintentarRevocacionesPendientesUseCase {
-        ReintentarRevocacionesPendientesUseCase(pendientes: repositorioDeRevocaciones, reloj: reloj)
-    }
+    // MARK: - C-02 · Recuperación
 
     private var cerrarSesion: CerrarSesionUseCase {
-        CerrarSesionUseCase(repositorio: repositorioDeSesion, pendientes: repositorioDeRevocaciones, reintentar: reintentarRevocaciones)
+        CerrarSesionUseCase(repositorio: repositorioDeSesion)
     }
 
     var cerrarRecuperacionAbandonada: CerrarRecuperacionAbandonadaUseCase {
         CerrarRecuperacionAbandonadaUseCase(repositorio: repositorioDeRecuperacion, cerrarSesion: cerrarSesion)
-    }
-
-    /// Al volver la red, reintenta las pendientes (CA-4). Se llama una vez al arrancar.
-    func vigilarLaRed() {
-        let reintentar = reintentarRevocaciones
-        monitorDeRed.empezar { Task { await reintentar.ejecutar() } }
     }
 
     // MARK: - ViewModels nuevos cada vez (lo escrito vive solo en memoria y se olvida al cerrar sesión)
@@ -144,19 +117,14 @@ final class ContenedorDeDependencias {
             reenviar: ReenviarVerificacionUseCase(repositorio: repositorioDeRegistro),
             confirmarCorreo: ConfirmarCorreoUseCase(repositorio: repositorioDeRegistro),
             aceptarAviso: AceptarAvisoDePrivacidadUseCase(repositorio: repositorioDeConsentimiento),
-            iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentarRevocaciones,
-                                              repositorioDeConsentimiento)
+            iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion)
         )
     }
 
     func iniciarSesionViewModel() -> IniciarSesionViewModel {
         IniciarSesionViewModel(
-            iniciarConCorreo: IniciarSesionConCorreoUseCase(
-                repositorio: repositorioDeSesion, pendientes: repositorioDeRevocaciones, reintentar: reintentarRevocaciones,
-                consentimiento: repositorioDeConsentimiento
-            ),
-            iniciarConGoogle: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion, repositorioDeRevocaciones, reintentarRevocaciones,
-                                              repositorioDeConsentimiento),
+            iniciarConCorreo: IniciarSesionConCorreoUseCase(repositorio: repositorioDeSesion),
+            iniciarConGoogle: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion),
             reenviar: ReenviarVerificacionUseCase(repositorio: repositorioDeRegistro)
         )
     }

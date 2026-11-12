@@ -13,14 +13,11 @@ import mx.rugbyapp.domain.cuentas.HashDeNonce
 import mx.rugbyapp.domain.cuentas.IniciarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ObtenedorDeCredencial
 import mx.rugbyapp.domain.cuentas.ProveedorDeIdentidad
-import mx.rugbyapp.domain.cuentas.ReintentarRevocacionesPendientesUseCase
 import mx.rugbyapp.domain.cuentas.RepositorioDeConsentimiento
 import mx.rugbyapp.domain.cuentas.RepositorioDeRecuperacion
 import mx.rugbyapp.domain.cuentas.RepositorioDeRegistro
-import mx.rugbyapp.domain.cuentas.RepositorioDeRevocacionesPendientes
 import mx.rugbyapp.domain.cuentas.RepositorioDeSesion
 import mx.rugbyapp.domain.cuentas.ResultadoDeRegistro
-import mx.rugbyapp.domain.cuentas.RevocacionPendiente
 import mx.rugbyapp.domain.cuentas.Sesion
 
 // C-01 · Fakes de los puertos que usan RegistroViewModel y AvisoDePrivacidadViewModel.
@@ -71,19 +68,10 @@ class SesionFalsa(var guardada: Sesion? = null) : RepositorioDeSesion {
     }
     override suspend fun sesionActual() = guardada
     override suspend fun borrarSesionLocal() { borrados++; errorAlBorrar?.let { throw it }; guardada = null }
+    override suspend fun revocarSesionEnServidor() { throw ErrorDeAutenticacion.SinConexion }
 }
 
-// C-02 · Fakes de las revocaciones pendientes (sin red: nunca revocan) y de la recuperación.
-
-class PendientesFalsas : RepositorioDeRevocacionesPendientes {
-    val guardadas = mutableListOf<RevocacionPendiente>()
-    override suspend fun guardar(usuarioId: String, revocarAviso: String?) =
-        RevocacionPendiente("p-${guardadas.size + 1}", usuarioId, revocarAviso, 1_000).also { guardadas += it }
-    override suspend fun descartar(id: String) { guardadas.removeAll { it.id == id } }
-    override suspend fun quitarAviso(usuarioId: String) = Unit
-    override suspend fun pendientes(): List<RevocacionPendiente> = guardadas.toList()
-    override suspend fun revocar(pendiente: RevocacionPendiente) { throw ErrorDeAutenticacion.SinConexion }
-}
+// C-02 · Fake de la recuperación.
 
 class RecuperacionFalsa : RepositorioDeRecuperacion {
     var errorAlEnviar: ErrorDeRecuperacion? = null
@@ -102,13 +90,11 @@ class RecuperacionFalsa : RepositorioDeRecuperacion {
     override suspend fun terminarRecuperacion() { enCurso = false }
 }
 
-/** Casos de uso armados como en App, con las pendientes sin red. */
+/** Casos de uso armados como en App (la revocación en el servidor de `SesionFalsa` es sin red). */
 object Armar {
-    fun reintentar(pendientes: PendientesFalsas) = ReintentarRevocacionesPendientesUseCase(pendientes) { 1_000 }
-    fun cerrarSesion(sesiones: RepositorioDeSesion, pendientes: PendientesFalsas = PendientesFalsas()) =
-        CerrarSesionUseCase(sesiones, pendientes, reintentar(pendientes))
-    fun google(sesiones: RepositorioDeSesion, error: ErrorDeAutenticacion? = null, pendientes: PendientesFalsas = PendientesFalsas()) =
-        IniciarSesionUseCase(GeneradorFijo, HashFijo, GoogleFalso(error), sesiones, pendientes, reintentar(pendientes), ConsentimientoFalso())
+    fun cerrarSesion(sesiones: RepositorioDeSesion) = CerrarSesionUseCase(sesiones)
+    fun google(sesiones: RepositorioDeSesion, error: ErrorDeAutenticacion? = null) =
+        IniciarSesionUseCase(GeneradorFijo, HashFijo, GoogleFalso(error), sesiones)
 }
 
 object GeneradorFijo : GeneradorDeNonce { override fun generar() = "crudo" }

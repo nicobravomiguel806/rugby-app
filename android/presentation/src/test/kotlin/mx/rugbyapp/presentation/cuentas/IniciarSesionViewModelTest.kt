@@ -26,10 +26,9 @@ class IniciarSesionViewModelTest {
     @After fun tearDown() { Dispatchers.resetMain() }
 
     private fun viewModel(sesiones: SesionFalsa, registro: RegistroFalso = RegistroFalso(), errorDeGoogle: ErrorDeAutenticacion? = null): IniciarSesionViewModel {
-        val pendientes = PendientesFalsas()
         return IniciarSesionViewModel(
-            IniciarSesionConCorreoUseCase(sesiones, pendientes, Armar.reintentar(pendientes), ConsentimientoFalso()),
-            Armar.google(sesiones, errorDeGoogle, pendientes),
+            IniciarSesionConCorreoUseCase(sesiones),
+            Armar.google(sesiones, errorDeGoogle),
             ReenviarVerificacionUseCase(registro),
         )
     }

@@ -30,4 +30,6 @@ class RepositorioDeSesionSinRastroDeGoogle(
         }
         interno.borrarSesionLocal()
     }
+
+    override suspend fun revocarSesionEnServidor() = interno.revocarSesionEnServidor()
 }

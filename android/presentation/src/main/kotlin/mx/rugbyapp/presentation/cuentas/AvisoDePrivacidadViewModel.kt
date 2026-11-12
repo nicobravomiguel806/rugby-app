@@ -15,16 +15,25 @@ import mx.rugbyapp.domain.cuentas.FinalidadSecundaria
 import mx.rugbyapp.domain.cuentas.ObtenerSesionActualUseCase
 import mx.rugbyapp.domain.cuentas.RechazarAvisoDePrivacidadUseCase
 
+/** C-02 · La decisión que la persona tomó en el aviso, para repetirla con «Reintentar» (ADR 0011). */
+enum class DecisionDelAviso { ACEPTAR, RECHAZAR }
+
 /** C-01 · Estado de la pantalla Aviso de privacidad (CA-2, CA-4, CA-9). Espejo en iOS: Presentation/Cuentas/AvisoDePrivacidadViewModel.swift. */
 sealed interface EstadoDelAviso {
     data object Pendiente : EstadoDelAviso
     data object Enviando : EstadoDelAviso
     data object Aceptado : EstadoDelAviso
     /**
-     * «No acepto»: la sesión se cerró y no se guardó nada; si había consentimiento previo, se registró su revocación o,
-     * si no se pudo, la sesión se cerró igual (CA-9, H-6). La App vuelve a Bienvenida.
+     * «No acepto»: la sesión se cerró y no se guardó nada; si había consentimiento previo, se registró su revocación
+     * (CA-9, H-6). La App vuelve a Bienvenida.
      */
     data object Rechazado : EstadoDelAviso
+    /**
+     * C-02 · ADR 0011: la decisión no se pudo registrar (sin red o error del servidor). Se queda en el aviso, con la
+     * sesión intacta, y «Reintentar» repite la misma decisión.
+     */
+    data class NoRegistrado(val decision: DecisionDelAviso) : EstadoDelAviso
+    /** Errores en los que reintentar no sirve: `VersionDesactualizada` y `SinSesion`. */
     data class Error(val error: ErrorDeConsentimiento) : EstadoDelAviso
     /** No se pudo borrar la sesión local al rechazar: se queda en la pantalla y se puede reintentar (CP-164c). */
     data object ErrorAlCerrarSesion : EstadoDelAviso
@@ -83,7 +92,7 @@ class AvisoDePrivacidadViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                EstadoDelAviso.Error(e as? ErrorDeConsentimiento ?: ErrorDeConsentimiento.Desconocido)
+                estadoTrasFallo(e, DecisionDelAviso.ACEPTAR)
             }
         }
     }
@@ -98,14 +107,26 @@ class AvisoDePrivacidadViewModel(
                 EstadoDelAviso.Rechazado
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: ErrorDeConsentimiento) {
-                // CP-164g: la revocación no se registró, pero la sesión local ya se cerró. Se sale del aviso igual.
-                _aceptoAviso.value = false
-                _finalidades.value = emptySet()
-                EstadoDelAviso.Rechazado
+            } catch (e: ErrorDeConsentimiento) {
+                // C-02 · CP-164g (ADR 0011): la revocación no se registró y la sesión sigue abierta. Se queda en el aviso.
+                estadoTrasFallo(e, DecisionDelAviso.RECHAZAR)
             } catch (_: Exception) {
                 EstadoDelAviso.ErrorAlCerrarSesion
             }
         }
+    }
+
+    /** C-02 · «Reintentar»: repite la decisión que no se pudo registrar. */
+    fun reintentar() {
+        when ((_estado.value as? EstadoDelAviso.NoRegistrado)?.decision) {
+            DecisionDelAviso.ACEPTAR -> aceptarYContinuar()
+            DecisionDelAviso.RECHAZAR -> rechazar()
+            null -> Unit
+        }
+    }
+
+    private fun estadoTrasFallo(e: Exception, decision: DecisionDelAviso): EstadoDelAviso = when (e) {
+        ErrorDeConsentimiento.VersionDesactualizada, ErrorDeConsentimiento.SinSesion -> EstadoDelAviso.Error(e as ErrorDeConsentimiento)
+        else -> EstadoDelAviso.NoRegistrado(decision)
     }
 }

@@ -88,7 +88,9 @@ final class AvisoDePrivacidadViewModelTests: XCTestCase {
         XCTAssertNil(sesiones.guardada)
     }
 
-    func test_CP164g_siLaRevocacionFallaLaSesionSeCierraYSaleDelAviso() async {
+    // C-02 · ADR 0011 (reescribe CP-164g): si la revocación falla, la sesión NO se cierra y se queda en el aviso con
+    // «No pudimos registrar tu decisión» y «Reintentar».
+    func test_CP164g_siLaRevocacionFallaSeQuedaEnElAvisoConLaSesionYReintentar() async {
         let consentimiento = ConsentimientoFalso()
         consentimiento.aceptado = true
         consentimiento.errorAlRevocar = .sinConexion
@@ -97,8 +99,50 @@ final class AvisoDePrivacidadViewModelTests: XCTestCase {
 
         await vm.rechazar()
 
-        XCTAssertEqual(vm.estado, .rechazado, "la sesión ya se cerró: no se deja a la persona en el aviso")
+        XCTAssertEqual(vm.estado, .noRegistrado(.rechazar))
+        XCTAssertEqual(sesiones.guardada, sesion, "la sesión no se cierra")
+        XCTAssertEqual(sesiones.borrados, 0)
+        XCTAssertEqual(AvisoDePrivacidadView.textoNoRegistrado, "No pudimos registrar tu decisión. Revisa tu conexión")
+    }
+
+    // C-02 · CP-168c: «Reintentar» después del fallo repite el «No acepto»; con red, revoca, cierra y sale del aviso.
+    func test_CP168c_reintentarRepiteElNoAceptoYConRedSaleDelAviso() async {
+        let consentimiento = ConsentimientoFalso()
+        consentimiento.aceptado = true
+        consentimiento.errorAlConsultar = .sinConexion
+        let sesiones = SesionFalsa(guardada: sesion)
+        let vm = viewModel(consentimiento, sesiones)
+        await vm.rechazar()
+        XCTAssertEqual(vm.estado, .noRegistrado(.rechazar))
+
+        consentimiento.errorAlConsultar = nil
+        await vm.reintentar()
+
+        XCTAssertEqual(vm.estado, .rechazado)
+        XCTAssertEqual(consentimiento.revocaciones, 1)
         XCTAssertNil(sesiones.guardada)
+    }
+
+    // C-02 · CP-165g/h: «Acepto» sin red se queda en el aviso con «Reintentar» (sesión intacta); «Reintentar» lo repite.
+    func test_CP165g_aceptarSinRedSeQuedaEnElAvisoYReintentarAcepta() async {
+        let consentimiento = ConsentimientoFalso()
+        consentimiento.errorAlAceptar = .sinConexion
+        let sesiones = SesionFalsa(guardada: sesion)
+        let vm = viewModel(consentimiento, sesiones)
+        vm.aceptoAvisoDePrivacidad = true
+        vm.alternar(.notificaciones)
+
+        await vm.aceptarYContinuar()
+
+        XCTAssertEqual(vm.estado, .noRegistrado(.aceptar))
+        XCTAssertEqual(sesiones.guardada, sesion)
+
+        consentimiento.errorAlAceptar = nil
+        await vm.reintentar()
+
+        XCTAssertEqual(vm.estado, .aceptado)
+        XCTAssertEqual(consentimiento.aceptaciones, [[.notificaciones], [.notificaciones]])
+        XCTAssertEqual(sesiones.guardada, sesion)
     }
 
     func test_CP164d_conSesionYSinAvisoHayQuePedirlo() async {

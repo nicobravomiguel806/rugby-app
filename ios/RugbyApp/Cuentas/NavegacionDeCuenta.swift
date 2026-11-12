@@ -28,7 +28,7 @@ final class NavegacionDeCuenta {
     private(set) var llegoUnEnlace = false
 
     private let contenedor: ContenedorDeDependencias
-    /// C-02 · §3.6: recuperación abandonada → revocaciones pendientes (hasta 10 s), antes de cualquier otra acción.
+    /// C-02 · §3.6: la recuperación abandonada se cierra antes de cualquier otra acción (hasta 10 s, R-2).
     private var preparacion: Task<Void, Never>?
 
     init(contenedor: ContenedorDeDependencias) {
@@ -51,22 +51,18 @@ final class NavegacionDeCuenta {
         if preparacion == nil {
             let contenedor = contenedor
             preparacion = Task {
-                await Self.prepararConTope(ContenedorDeDependencias.topeDelReintentoAlArrancar,
-                                           cerrarAbandonada: contenedor.cerrarRecuperacionAbandonada,
-                                           reintentar: contenedor.reintentarRevocaciones)
-                contenedor.vigilarLaRed()
+                await Self.prepararConTope(ContenedorDeDependencias.topeDelArranque,
+                                           cerrarAbandonada: contenedor.cerrarRecuperacionAbandonada)
             }
         }
         await preparacion?.value
     }
 
-    /// Recuperación abandonada y revocaciones pendientes, antes de cualquier otra acción y bajo el MISMO tope (P-4, R-2):
-    /// el cierre de la recuperación también reintenta las pendientes y, sin red, no puede alargar el arranque.
-    static func prepararConTope(_ tope: Duration, cerrarAbandonada: CerrarRecuperacionAbandonadaUseCase,
-                                reintentar: ReintentarRevocacionesPendientesUseCase) async {
+    /// Recuperación abandonada, antes de cualquier otra acción y con tope (R-2): cerrar la sesión intenta revocarla en el
+    /// servidor y, sin red, no puede alargar el arranque (ADR 0011).
+    static func prepararConTope(_ tope: Duration, cerrarAbandonada: CerrarRecuperacionAbandonadaUseCase) async {
         await conTope(tope) {
             try? await cerrarAbandonada.ejecutar()
-            await reintentar.ejecutar()
         }
     }
 

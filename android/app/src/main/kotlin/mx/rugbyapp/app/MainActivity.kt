@@ -269,7 +269,7 @@ class MainActivity : ComponentActivity() {
         // H-6 · Si llegó un enlace del correo, no se pide aquí: lo consulta el flujo del enlace (CP-164e).
         LaunchedEffect(Unit) {
             atenderUnaVez(EventosDeCuenta.ARRANQUE, Unit) {
-                preparacion.esperar() // C-02 · §3.6: recuperación abandonada y revocaciones pendientes primero
+                preparacion.esperar() // C-02 · §3.6: la recuperación abandonada primero
                 if (hayQuePedirElAvisoAlArrancar.ejecutar(llegoUnEnlace = { eventos.llegoUnEnlace })) mostrarAviso()
             }
         }

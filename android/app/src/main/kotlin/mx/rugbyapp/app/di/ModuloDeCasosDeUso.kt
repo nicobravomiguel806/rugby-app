@@ -6,7 +6,6 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 import mx.rugbyapp.app.BuildConfig
-import mx.rugbyapp.app.cuentas.MonitorDeRed
 import mx.rugbyapp.app.cuentas.ObtenedorDeCredencialGoogle
 import mx.rugbyapp.app.cuentas.PreparacionDelArranque
 import mx.rugbyapp.domain.cuentas.AceptarAvisoDePrivacidadUseCase
@@ -25,12 +24,9 @@ import mx.rugbyapp.domain.cuentas.PedirRecuperacionDeContrasenaUseCase
 import mx.rugbyapp.domain.cuentas.RechazarAvisoDePrivacidadUseCase
 import mx.rugbyapp.domain.cuentas.ReenviarVerificacionUseCase
 import mx.rugbyapp.domain.cuentas.RegistrarUsuarioUseCase
-import mx.rugbyapp.domain.cuentas.ReintentarRevocacionesPendientesUseCase
-import mx.rugbyapp.domain.cuentas.Reloj
 import mx.rugbyapp.domain.cuentas.RepositorioDeConsentimiento
 import mx.rugbyapp.domain.cuentas.RepositorioDeRecuperacion
 import mx.rugbyapp.domain.cuentas.RepositorioDeRegistro
-import mx.rugbyapp.domain.cuentas.RepositorioDeRevocacionesPendientes
 import mx.rugbyapp.domain.cuentas.RepositorioDeSesion
 import mx.rugbyapp.domain.cuentas.RestablecerContrasenaUseCase
 import mx.rugbyapp.domain.cuentas.ValidadorDeRegistro
@@ -49,39 +45,22 @@ object ModuloDeCasosDeUso {
     @Provides @Singleton
     fun obtenedorDeGoogle(): ObtenedorDeCredencialGoogle = ObtenedorDeCredencialGoogle(BuildConfig.GOOGLE_WEB_CLIENT_ID)
 
-    // C-02 · Revocaciones pendientes (ADR 0010): se reintentan al arrancar, al volver la red y antes de iniciar sesión.
-    @Provides
-    fun reintentarRevocaciones(pendientes: RepositorioDeRevocacionesPendientes, reloj: Reloj): ReintentarRevocacionesPendientesUseCase =
-        ReintentarRevocacionesPendientesUseCase(pendientes, reloj)
-
     @Provides
     fun iniciarSesion(
         generador: GeneradorDeNonce,
         hash: HashDeNonce,
         obtenedor: ObtenedorDeCredencialGoogle,
         repositorio: RepositorioDeSesion,
-        pendientes: RepositorioDeRevocacionesPendientes,
-        reintentar: ReintentarRevocacionesPendientesUseCase,
-        consentimiento: RepositorioDeConsentimiento,
-    ): IniciarSesionUseCase = IniciarSesionUseCase(generador, hash, obtenedor, repositorio, pendientes, reintentar, consentimiento)
+    ): IniciarSesionUseCase = IniciarSesionUseCase(generador, hash, obtenedor, repositorio)
 
     @Provides
-    fun iniciarSesionConCorreo(
-        repositorio: RepositorioDeSesion,
-        pendientes: RepositorioDeRevocacionesPendientes,
-        reintentar: ReintentarRevocacionesPendientesUseCase,
-        consentimiento: RepositorioDeConsentimiento,
-    ): IniciarSesionConCorreoUseCase = IniciarSesionConCorreoUseCase(repositorio, pendientes, reintentar, consentimiento)
+    fun iniciarSesionConCorreo(repositorio: RepositorioDeSesion): IniciarSesionConCorreoUseCase = IniciarSesionConCorreoUseCase(repositorio)
 
     @Provides
     fun obtenerSesionActual(repositorio: RepositorioDeSesion): ObtenerSesionActualUseCase = ObtenerSesionActualUseCase(repositorio)
 
     @Provides
-    fun cerrarSesion(
-        repositorio: RepositorioDeSesion,
-        pendientes: RepositorioDeRevocacionesPendientes,
-        reintentar: ReintentarRevocacionesPendientesUseCase,
-    ): CerrarSesionUseCase = CerrarSesionUseCase(repositorio, pendientes, reintentar)
+    fun cerrarSesion(repositorio: RepositorioDeSesion): CerrarSesionUseCase = CerrarSesionUseCase(repositorio)
 
     // C-02 · Recuperación de contraseña (CA-2, D-7).
     @Provides
@@ -101,11 +80,8 @@ object ModuloDeCasosDeUso {
 
     // C-02 · §3.6: una sola preparación por proceso, antes de cualquier otra acción.
     @Provides @Singleton
-    fun preparacionDelArranque(
-        cerrarAbandonada: CerrarRecuperacionAbandonadaUseCase,
-        reintentar: ReintentarRevocacionesPendientesUseCase,
-        monitorDeRed: MonitorDeRed,
-    ): PreparacionDelArranque = PreparacionDelArranque(cerrarAbandonada, reintentar, monitorDeRed)
+    fun preparacionDelArranque(cerrarAbandonada: CerrarRecuperacionAbandonadaUseCase): PreparacionDelArranque =
+        PreparacionDelArranque(cerrarAbandonada)
 
     // C-01 · Registro, verificación del correo y aviso de privacidad.
     @Provides

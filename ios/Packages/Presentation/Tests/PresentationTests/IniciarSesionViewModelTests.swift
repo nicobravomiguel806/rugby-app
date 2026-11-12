@@ -8,11 +8,9 @@ import Domain
 final class IniciarSesionViewModelTests: XCTestCase {
     private func viewModel(_ sesiones: SesionFalsa, registro: RegistroFalso = RegistroFalso(),
                            errorDeGoogle: ErrorDeAutenticacion? = nil) -> IniciarSesionViewModel {
-        let pendientes = PendientesFalsas()
-        return IniciarSesionViewModel(
-            iniciarConCorreo: IniciarSesionConCorreoUseCase(repositorio: sesiones, pendientes: pendientes, reintentar: Armar.reintentar(pendientes),
-                                                            consentimiento: ConsentimientoFalso()),
-            iniciarConGoogle: Armar.google(sesiones, error: errorDeGoogle, pendientes: pendientes),
+        IniciarSesionViewModel(
+            iniciarConCorreo: IniciarSesionConCorreoUseCase(repositorio: sesiones),
+            iniciarConGoogle: Armar.google(sesiones, error: errorDeGoogle),
             reenviar: ReenviarVerificacionUseCase(repositorio: registro)
         )
     }

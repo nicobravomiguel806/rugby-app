@@ -29,4 +29,8 @@ final class RepositorioDeSesionSinRastroDeGoogle: RepositorioDeSesion {
         await MainActor.run { GIDSignIn.sharedInstance.signOut() }
         try await interno.borrarSesionLocal()
     }
+
+    func revocarSesionEnServidor() async throws {
+        try await interno.revocarSesionEnServidor()
+    }
 }

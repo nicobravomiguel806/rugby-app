@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
+import mx.rugbyapp.app.di.ModuloDeCasosDeUso
 import mx.rugbyapp.data.cuentas.AlmacenDeSesionCifrado
 import mx.rugbyapp.data.cuentas.ConfiguracionDeSupabase
 import mx.rugbyapp.data.cuentas.RepositorioDeSesionSupabase
@@ -31,7 +32,7 @@ import org.junit.runner.RunWith
 /**
  * SP-04 · Almacén real (Tink AES-GCM + Android Keystore + DataStore, ADR 0007) en el dispositivo.
  * CP-154 (otra instancia lee la misma sesión), CP-155 (cerrar sesión no deja token), CA-1 (nada en claro en
- * shared_prefs ni en el archivo de DataStore) y CA-2 (sin respaldo). C-02 · CP-170 (H-20) y CP-167h (revocaciones). Espejo en iOS: RugbyAppTests/AlmacenDeSesionKeychainTests.swift.
+ * shared_prefs ni en el archivo de DataStore) y CA-2 (sin respaldo). C-02 · CP-170 (H-20) y CP-167h (sin revocaciones, ADR 0011). Espejo en iOS: RugbyAppTests/AlmacenDeSesionKeychainTests.swift.
  * Sin espacios en los nombres: el dex de minSdk 29 no los admite en pruebas instrumentadas.
  */
 @RunWith(AndroidJUnit4::class)
@@ -161,31 +162,24 @@ class AlmacenDeSesionCifradoTest {
     }
 
     /**
-     * C-02 · CP-167h (ADR 0010, AT-10, AT-17): la revocación pendiente vive cifrada en su propio archivo
-     * (`revocaciones.preferences_pb`), con su llave y su associated data; nunca en claro, y `borrarTodo()` de la sesión
-     * no la toca. Espejo en iOS: RugbyAppTests/AlmacenDeRevocacionesKeychainTests.swift.
+     * C-02 · CP-167h (ADR 0011, AT-10, AT-17): cerrar sesión sin red, con el caso de uso que compone la app, es solo
+     * local: no queda la sesión, no se crea el DataStore `revocaciones` (ni su keyset ni su llave del Keystore) y no hay
+     * tokens en claro. Espejo en iOS: RugbyAppTests/CierreDeSesionSinRastroTests.swift › test_CP167h_….
      */
-    @Test fun cp167h_laPendienteSeGuardaCifradaYCerrarSesionNoLaBorra() = runBlocking {
-        val nombreDeRevocaciones = "revocaciones_prueba"
-        val aliasDeRevocaciones = "rugbyapp_revocaciones_prueba"
-        val revocaciones = AlmacenDeSesionCifrado(contexto, nombreDeRevocaciones, aliasDeRevocaciones)
-        try {
-            val entrada = """{"usuarioId":"u-1","refreshToken":"$refreshToken","creadaEn":1}"""
-            revocaciones.guardar("revocacion_p-1", entrada)
-            almacen().saveSession(sesion)
+    @Test fun cp167h_cerrarSesionSinRedNoDejaElDataStoreDeRevocacionesNiTokens() = runBlocking {
+        almacen().saveSession(sesion)
+        // Sin red: el puerto 1 de localhost rechaza la conexión, así que el logout en el servidor falla.
+        val repositorio = RepositorioDeSesionSupabase(ConfiguracionDeSupabase("https://127.0.0.1:1", "anon-de-prueba"), almacen())
+        assertEquals("precondición", sesion.user?.id, repositorio.sesionActual()?.usuarioId)
 
-            almacen().borrarTodo() // cerrar sesión
+        ModuloDeCasosDeUso.cerrarSesion(repositorio).ejecutar()
 
-            val otraInstancia = AlmacenDeSesionCifrado(contexto, nombreDeRevocaciones, aliasDeRevocaciones)
-            assertEquals(entrada, otraInstancia.leer("revocacion_p-1"))
-            assertEquals(setOf("revocacion_p-1"), otraInstancia.claves())
-            assertTrue(File(contexto.filesDir, "datastore/$nombreDeRevocaciones.preferences_pb").isFile)
-            assertSinTokensEnClaro()
-        } finally {
-            revocaciones.borrarTodo()
-            contexto.getSharedPreferences("${nombreDeRevocaciones}_keyset", Context.MODE_PRIVATE).edit().clear().commit()
-            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(aliasDeRevocaciones)
-        }
+        assertNull(repositorio.sesionActual())
+        assertNull(almacen().loadSession())
+        assertFalse(File(contexto.filesDir, "datastore/revocaciones.preferences_pb").exists())
+        assertFalse(File(contexto.applicationInfo.dataDir, "shared_prefs/revocaciones_keyset.xml").exists())
+        assertFalse(KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.containsAlias("rugbyapp_revocaciones"))
+        assertSinTokensEnClaro()
     }
 
     @Test fun ca2_laAppNoPermiteRespaldoDelSistema() {
