@@ -4,20 +4,28 @@
 // - C-02 · iniciarSesion(correo:contrasena:): POST /auth/v1/token?grant_type=password. `invalid_credentials` (correo o
 //   contraseña incorrectos, AT-11) → credencialRechazada; `email_not_confirmed` → correoSinVerificar; 429 →
 //   demasiadosIntentos; sin red → sinConexion.
-// - borrarSesionLocal: borra el Keychain (sin red, P-8). C-02 · La revocación en el servidor ya no vive aquí: la hace
-//   RepositorioDeRevocacionesPendientesSupabase con el refresh token que guardó antes del borrado (ADR 0010).
+// - borrarSesionLocal: guarda en memoria el access token y borra el Keychain (sin red, P-8).
+// - revocarSesionEnServidor: POST /auth/v1/logout?scope=local con ese token (solo este dispositivo) y lo olvida. Sin red
+//   falla y el cierre local se mantiene: no se guarda nada para reintentar (C-02, ADR 0011).
 // Nada de esto escribe tokens ni contraseñas en logs (AT-10).
 import Foundation
 import Auth
 import Domain
 
 public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked Sendable {
+    private let configuracion: ConfiguracionDeSupabase
     private let almacen: any AlmacenSeguroDeSesion
+    private let fetch: ClienteSupabase.Fetch
     private let auth: AuthClient?
+
+    private let candado = NSLock()
+    private var tokenPorRevocar: String?
 
     /// C-01 · El cliente compartido de la app (ADR 0006): el mismo que usan registro y consentimiento.
     public init(cliente: ClienteSupabase) {
+        self.configuracion = cliente.configuracion
         self.almacen = cliente.almacen
+        self.fetch = cliente.fetch
         self.auth = cliente.auth
     }
 
@@ -60,9 +68,36 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
     }
 
     public func borrarSesionLocal() async throws {
+        let token = auth?.currentSession?.accessToken
+        candado.withLock { tokenPorRevocar = token }
         do {
             try almacen.borrarTodo()
         } catch {
+            throw ErrorDeAutenticacion.desconocido
+        }
+    }
+
+    public func revocarSesionEnServidor() async throws {
+        let token: String? = candado.withLock { defer { tokenPorRevocar = nil }; return tokenPorRevocar }
+        guard let token, let urlDeAuth = configuracion.urlDeAuth else { return }
+
+        var componentes = URLComponents(url: urlDeAuth.appendingPathComponent("logout"), resolvingAgainstBaseURL: false)
+        componentes?.queryItems = [URLQueryItem(name: "scope", value: "local")]
+        guard let url = componentes?.url else { return }
+        var pedido = URLRequest(url: url)
+        pedido.httpMethod = "POST"
+        pedido.setValue(configuracion.anonKey, forHTTPHeaderField: "apikey")
+        pedido.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let respuesta: URLResponse
+        do {
+            (_, respuesta) = try await fetch(pedido)
+        } catch {
+            throw Self.traducir(error)
+        }
+        // 401/403/404: el token ya no vale o el usuario no existe; para este dispositivo equivale a revocada.
+        let estado = (respuesta as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(estado) || [401, 403, 404].contains(estado) else {
             throw ErrorDeAutenticacion.desconocido
         }
     }

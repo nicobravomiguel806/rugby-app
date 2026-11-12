@@ -52,7 +52,6 @@ class RepositorioDeSesionSupabaseTest {
         override suspend fun guardar(clave: String, valor: String) = Unit
         override suspend fun leer(clave: String): String? = null
         override suspend fun borrar(clave: String) = Unit
-        override suspend fun claves(): Set<String> = emptySet()
         override suspend fun borrarTodo() { sesion = null; codeVerifier = null }
     }
 
@@ -139,7 +138,7 @@ class RepositorioDeSesionSupabaseTest {
         assertTrue(servidor.pedidos.isEmpty())
     }
 
-    @Test fun `CP-155 borrar local no usa la red`() = runTest {
+    @Test fun `CP-155 borrar local no usa la red y revocar usa logout local con el token guardado`() = runTest {
         val servidor = ServidorFalso().apply { responder = { respond(sesionJson, HttpStatusCode.OK, json) } }
         val almacen = AlmacenEnMemoria()
         val repo = repositorio(servidor, almacen)
@@ -151,6 +150,26 @@ class RepositorioDeSesionSupabaseTest {
         assertEquals("borrar lo local no usa la red", pedidosAntes, servidor.pedidos.size)
         assertNull(almacen.sesion)
         assertNull(repo.sesionActual())
+
+        servidor.responder = { respond("", HttpStatusCode.NoContent) }
+        repo.revocarSesionEnServidor()
+
+        val (logout, _) = servidor.pedidos.last()
+        assertEquals("POST", logout.method.value)
+        assertEquals("/auth/v1/logout", logout.url.encodedPath)
+        assertEquals("local", logout.url.parameters["scope"])
+        assertEquals("Bearer at-123", logout.headers[HttpHeaders.Authorization])
+        assertEquals("anon-de-prueba", logout.headers["apikey"])
+    }
+
+    @Test fun `CP-155 revocar sin red falla con sin conexion`() = runTest {
+        val servidor = ServidorFalso().apply { responder = { respond(sesionJson, HttpStatusCode.OK, json) } }
+        val repo = repositorio(servidor)
+        repo.iniciarSesion(credencial, "n")
+        repo.borrarSesionLocal()
+        servidor.responder = { throw IOException("sin red") }
+
+        esperarError(ErrorDeAutenticacion.SinConexion) { repo.revocarSesionEnServidor() }
     }
 
     @Test fun `H-15 borrar local con el almacen ilegible no lanza y borra todo`() = runTest {
@@ -164,7 +183,9 @@ class RepositorioDeSesionSupabaseTest {
         repo.borrarSesionLocal()
 
         assertNull(almacen.codeVerifier)
-        assertTrue("borrar lo local no usa la red", servidor.pedidos.isEmpty())
+        assertTrue("sin token no se llama a la red", servidor.pedidos.isEmpty())
+        repo.revocarSesionEnServidor()
+        assertTrue(servidor.pedidos.isEmpty())
     }
 
     // C-02 · CP-165: inicio con correo y contraseña

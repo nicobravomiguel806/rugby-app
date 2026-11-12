@@ -18,7 +18,7 @@ import java.net.URI
  * Sin configuración no se crea el cliente: los repositorios responden `ConfiguracionIncompleta` y la app arranca igual.
  * C-01 · Un solo cliente por app (ADR 0006): Auth (sesión y `code_verifier` de PKCE en el mismo almacén cifrado) y
  * Postgrest (manda el access token de ese mismo Auth). Lo comparten los repositorios de sesión, registro y
- * consentimiento. C-02 · también recuperación (no revocaciones: esas no tocan el cliente compartido).
+ * consentimiento. C-02 · también recuperación.
  * Espejo en iOS: Data/Cuentas/ClienteSupabase.swift.
  */
 data class ConfiguracionDeSupabase(val url: String, val anonKey: String) {
@@ -34,15 +34,11 @@ data class ConfiguracionDeSupabase(val url: String, val anonKey: String) {
     override fun toString() = "ConfiguracionDeSupabase(url=$url)" // la llave no se imprime
 }
 
-/**
- * C-02 · Entradas de texto por clave en un almacén cifrado (ADR 0007): la marca «recuperación en curso» en el de la
- * sesión y las revocaciones pendientes en el suyo (ADR 0010).
- */
+/** C-02 · Entradas de texto por clave en el almacén cifrado de la sesión (ADR 0007): la marca «recuperación en curso». */
 interface AlmacenPorClave {
     suspend fun guardar(clave: String, valor: String)
     suspend fun leer(clave: String): String?
     suspend fun borrar(clave: String)
-    suspend fun claves(): Set<String>
 }
 
 /** Almacén que, además de lo que pide supabase-kt, sabe borrar todo lo suyo (cierre de sesión, P-8). */

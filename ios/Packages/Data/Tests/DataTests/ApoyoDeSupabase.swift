@@ -1,6 +1,5 @@
 import Foundation
 import Auth
-import Domain
 @testable import Data
 
 // C-01 · Apoyo compartido por las pruebas de Data de Cuentas: almacén en memoria y servidor falso.
@@ -22,13 +21,9 @@ final class ServidorFalsoDePrueba: @unchecked Sendable {
     private var _pedidos: [URLRequest] = []
     var pedidos: [URLRequest] { candado.lock(); defer { candado.unlock() }; return _pedidos }
     var responder: @Sendable (URLRequest) throws -> (Int, Data) = { _ in (200, Data()) }
-    /// C-02 · Corre antes de responder, ya con el pedido anotado: simula lo que pasa mientras el pedido viaja
-    /// (p. ej. `quitarAviso` durante el refresh, H-1) o un pedido que no termina (plazo total, R-2).
-    var antesDeResponder: (@Sendable (URLRequest) async throws -> Void)?
 
     func fetch(_ pedido: URLRequest) async throws -> (Data, URLResponse) {
-        candado.lock(); _pedidos.append(pedido); let responder = self.responder; let antes = antesDeResponder; candado.unlock()
-        if let antes { try await antes(pedido) }
+        candado.lock(); _pedidos.append(pedido); let responder = self.responder; candado.unlock()
         let (estado, cuerpo) = try responder(pedido)
         return (cuerpo, HTTPURLResponse(url: pedido.url!, statusCode: estado, httpVersion: nil,
                                         headerFields: ["Content-Type": "application/json"])!)
@@ -58,27 +53,4 @@ enum RespuestasDePrueba {
     static func query(_ pedido: URLRequest, _ nombre: String) -> String? {
         URLComponents(url: pedido.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == nombre }?.value
     }
-}
-
-/// C-02 · Almacén de revocaciones en memoria (ADR 0010). Lleva la cuenta de lo escrito para revisar la rotación.
-final class AlmacenDeRevocacionesEnMemoriaDePrueba: AlmacenDeRevocaciones, @unchecked Sendable {
-    private let candado = NSLock()
-    private var datos: [String: Data] = [:]
-    func guardar(_ valor: Data, id: String) throws { candado.lock(); datos[id] = valor; candado.unlock() }
-    func leer(id: String) throws -> Data? { candado.lock(); defer { candado.unlock() }; return datos[id] }
-    func borrar(id: String) throws { candado.lock(); datos[id] = nil; candado.unlock() }
-    func ids() throws -> [String] { candado.lock(); defer { candado.unlock() }; return datos.keys.sorted() }
-
-    func entrada(_ id: String) -> RepositorioDeRevocacionesPendientesSupabase.Entrada? {
-        (try? leer(id: id)).flatMap { $0 }.flatMap { try? JSONDecoder().decode(RepositorioDeRevocacionesPendientesSupabase.Entrada.self, from: $0) }
-    }
-
-    func poner(_ entrada: RepositorioDeRevocacionesPendientesSupabase.Entrada, id: String) {
-        try? guardar(try! JSONEncoder().encode(entrada), id: id)
-    }
-}
-
-struct RelojDePrueba: Reloj {
-    let ahora: Int64
-    func ahoraEnSegundos() -> Int64 { ahora }
 }

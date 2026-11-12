@@ -2,7 +2,7 @@
 // Sin configuración no se crea el cliente: los repositorios responden `configuracionIncompleta` y la app arranca igual.
 // C-01 · Un solo cliente por app (ADR 0006): el mismo `AuthClient` (sesión y `code_verifier` de PKCE en el mismo
 // almacén) y un `PostgrestClient` que manda el access token de ESE `AuthClient`. Lo comparten los repositorios de
-// sesión, registro y consentimiento. C-02 · también recuperación (no revocaciones: esas no tocan el cliente compartido).
+// sesión, registro y consentimiento. C-02 · también recuperación.
 // Espejo en Android: data/.../cuentas/ClienteSupabase.kt.
 import Foundation
 import Auth

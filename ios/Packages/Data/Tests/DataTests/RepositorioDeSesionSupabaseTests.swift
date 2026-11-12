@@ -111,7 +111,7 @@ final class RepositorioDeSesionSupabaseTests: XCTestCase {
         XCTAssertTrue(servidor.pedidos.isEmpty)
     }
 
-    func test_CP155_borrarLocalNoUsaLaRed() async throws {
+    func test_CP155_borrarLocalNoUsaLaRedYRevocarUsaLogoutLocalConElTokenGuardado() async throws {
         let servidor = ServidorFalso()
         servidor.responder = { _ in (200, Self.sesionJSON) }
         let almacen = AlmacenEnMemoria()
@@ -125,6 +125,27 @@ final class RepositorioDeSesionSupabaseTests: XCTestCase {
         XCTAssertTrue(almacen.claves.isEmpty)
         let actual = await repo.sesionActual()
         XCTAssertNil(actual)
+
+        servidor.responder = { _ in (204, Data()) }
+        try await repo.revocarSesionEnServidor()
+
+        let logout = try XCTUnwrap(servidor.pedidos.last)
+        XCTAssertEqual(logout.httpMethod, "POST")
+        XCTAssertEqual(logout.url?.path, "/auth/v1/logout")
+        XCTAssertEqual(logout.url?.query, "scope=local")
+        XCTAssertEqual(logout.value(forHTTPHeaderField: "Authorization"), "Bearer at-123")
+        XCTAssertEqual(logout.value(forHTTPHeaderField: "apikey"), "anon-de-prueba")
+    }
+
+    func test_CP155_revocarSinRedFallaConSinConexion() async throws {
+        let servidor = ServidorFalso()
+        servidor.responder = { _ in (200, Self.sesionJSON) }
+        let repo = repositorio(servidor)
+        _ = try await repo.iniciarSesion(con: credencial, nonce: "n")
+        try await repo.borrarSesionLocal()
+        servidor.responder = { _ in throw URLError(.notConnectedToInternet) }
+
+        await esperarError(.sinConexion) { try await repo.revocarSesionEnServidor() }
     }
 
     // MARK: - C-02 · CP-165: inicio con correo y contraseña

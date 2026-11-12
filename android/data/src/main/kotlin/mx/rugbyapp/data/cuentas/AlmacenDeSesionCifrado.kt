@@ -78,8 +78,8 @@ class AlmacenDeSesionCifrado(
     }
 
     /**
-     * C-02 · Entradas genéricas por clave (marca «recuperación en curso» y revocaciones pendientes, ADR 0010). Se cifran
-     * igual que la sesión y el associated data es la propia clave, así que una entrada no se puede mover a otra.
+     * C-02 · Entradas genéricas por clave (marca «recuperación en curso»). Se cifran igual que la sesión y el associated
+     * data es la propia clave, así que una entrada no se puede mover a otra.
      */
     override suspend fun guardar(clave: String, valor: String) {
         withContext(Dispatchers.IO) {
@@ -113,14 +113,6 @@ class AlmacenDeSesionCifrado(
 
     override suspend fun borrar(clave: String) {
         withContext(Dispatchers.IO) { datos.edit { it.remove(stringPreferencesKey(clave)) } }
-    }
-
-    override suspend fun claves(): Set<String> = withContext(Dispatchers.IO) {
-        try {
-            datos.data.first().asMap().keys.map { it.name }.toSet()
-        } catch (_: IOException) {
-            emptySet()
-        }
     }
 
     /** La primitiva AEAD. Si el keyset ya no se puede abrir con la llave del Keystore, se descarta todo y se crea uno nuevo. */
