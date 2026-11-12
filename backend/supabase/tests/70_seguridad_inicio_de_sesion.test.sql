@@ -112,4 +112,21 @@ select tests.como_en_sesion('00000000-0000-0000-0000-000000000070', 'sesion-a-vi
 select tests.ok(tests.valor($$revocar_aviso_de_privacidad('v0-borrador')$$),
                 'C02-S4 (documenta H-1) La RPC con el token de la sesión vieja S1 revoca la aceptación hecha en S2: P-4 solo lo protege el cliente');
 
+-- ── Ronda 2 (H-9): volver a aceptar con el aviso vigente no deja rastro en el servidor ─────────────────────────
+-- Si la revocación en línea al iniciar sesión falla y la App vuelve a mostrar el aviso (la consulta también falló),
+-- «Acepto» con el aviso todavía vigente devuelve false y no inserta nada. Para el servidor la última decisión sigue
+-- siendo la aceptación anterior a la pendiente, y la RPC (con la sesión vieja o con la nueva) la revoca. Lo único que
+-- protege esa aceptación posterior es que el cliente quite el aviso de la pendiente al aceptar.
+select tests.como_en_sesion('00000000-0000-0000-0000-000000000070', 'sesion-a-nueva');
+select tests.ok(tests.valor($$aceptar_aviso_de_privacidad('v0-borrador', '{}')$$), 'C02-SP6 (preparación) A acepta otra vez en S2');
+select tests.ok(tests.valor($$not aceptar_aviso_de_privacidad('v0-borrador', '{}')$$)
+                and (select count(*) = 5 from privacy_consents where kind = 'aviso'),
+                'C02-S5a (documenta H-9) Volver a aceptar con el aviso vigente devuelve false y no inserta fila');
+select tests.como_en_sesion('00000000-0000-0000-0000-000000000070', 'sesion-a-vieja');
+select tests.ok(tests.valor($$revocar_aviso_de_privacidad('v0-borrador')$$)
+                and tests.valor($$not aviso_de_privacidad_aceptado('v0-borrador')$$),
+                'C02-S5b (documenta H-9) La pendiente revoca aunque la persona haya vuelto a aceptar después: P-4 depende de quitarAviso al aceptar');
+select tests.ok((select bool_and(accepted_at is not null) from privacy_consents where kind = 'aviso'),
+                'C02-S5c (mitigación H-11) Cada fila del aviso tiene hora del servidor: se puede comparar con la hora del rechazo');
+
 rollback;
