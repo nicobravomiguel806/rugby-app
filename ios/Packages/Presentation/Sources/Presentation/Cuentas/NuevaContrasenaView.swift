@@ -14,6 +14,14 @@ public struct NuevaContrasenaView: View {
         VStack(alignment: .leading, spacing: 16) {
             if viewModel.estado == .confirmando {
                 ProgressView().frame(maxWidth: .infinity)
+            } else if case let .canjeFallido(error) = viewModel.estado {
+                // R-3: sin sesión de recuperación no hay formulario; se reintenta el canje del mismo enlace.
+                Text(TextosDeCuenta.mensaje(de: error)).foregroundStyle(.red).accessibilityIdentifier("nueva.error")
+                Button { Task { await viewModel.reintentarCanje() } } label: {
+                    Text("Reintentar").frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("nueva.reintentar")
             } else {
                 CampoConMarco(titulo: "Nueva contraseña (mín. 10)", error: viewModel.errores.first.map(TextosDeCuenta.mensaje(de:))) {
                     CampoDeContrasena(titulo: "Nueva contraseña (mín. 10)", texto: $viewModel.contrasena,

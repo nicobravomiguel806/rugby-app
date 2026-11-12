@@ -33,8 +33,16 @@ fun NuevaContrasenaScreen(viewModel: NuevaContrasenaViewModel, modifier: Modifie
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Nueva contraseña", style = MaterialTheme.typography.headlineMedium)
+        val canjeFallido = estado as? EstadoDeNuevaContrasena.CanjeFallido
         if (estado == EstadoDeNuevaContrasena.Confirmando) {
             CircularProgressIndicator()
+        } else if (canjeFallido != null) {
+            // R-3: sin sesión de recuperación no hay formulario; se reintenta el canje del mismo enlace.
+            Text(mensajeDe(canjeFallido.error), color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("nueva.error"))
+            Button(
+                onClick = viewModel::reintentarCanje,
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).testTag("nueva.reintentar"),
+            ) { Text("Reintentar") }
         } else {
             CampoDeContrasena(
                 titulo = "Nueva contraseña (mín. 10)",

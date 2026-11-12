@@ -110,9 +110,11 @@ final class RecuperacionFalsa: RepositorioDeRecuperacion, @unchecked Sendable {
     var enCurso = false
     private(set) var enviados: [String] = []
     private(set) var cambios: [String] = []
+    private(set) var enlaces: [String] = []
     let sesion = Sesion(usuarioId: "u-1", correo: "daniela@ejemplo.mx")
     func enviarEnlace(correo: String) async throws { enviados.append(correo); if let errorAlEnviar { throw errorAlEnviar } }
     func confirmarEnlace(enlace: String) async throws -> Sesion {
+        enlaces.append(enlace)
         if let errorAlConfirmar { throw errorAlConfirmar }
         enCurso = true
         return sesion

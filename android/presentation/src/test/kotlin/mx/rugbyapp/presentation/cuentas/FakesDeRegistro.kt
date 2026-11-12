@@ -92,9 +92,10 @@ class RecuperacionFalsa : RepositorioDeRecuperacion {
     var enCurso = false
     val enviados = mutableListOf<String>()
     val cambios = mutableListOf<String>()
+    val enlaces = mutableListOf<String>()
     val sesion = Sesion("u-1", "daniela@ejemplo.mx")
     override suspend fun enviarEnlace(correo: String) { enviados += correo; errorAlEnviar?.let { throw it } }
-    override suspend fun confirmarEnlace(enlace: String): Sesion { errorAlConfirmar?.let { throw it }; enCurso = true; return sesion }
+    override suspend fun confirmarEnlace(enlace: String): Sesion { enlaces += enlace; errorAlConfirmar?.let { throw it }; enCurso = true; return sesion }
     override suspend fun cambiarContrasena(nueva: String) { cambios += nueva; errorAlCambiar?.let { throw it } }
     override suspend fun cerrarOtrasSesiones() = Unit
     override suspend fun recuperacionEnCurso() = enCurso

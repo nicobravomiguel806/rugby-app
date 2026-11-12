@@ -10,6 +10,9 @@ public enum EstadoDeNuevaContrasena: Equatable, Sendable {
     /// Contraseña cambiada: la sesión queda iniciada y las demás cerradas. La App consulta el aviso (§3.6).
     case guardada(Sesion)
     case error(ErrorDeRecuperacion)
+    /// R-3: el canje falló sin conexión o con un error desconocido. Sin sesión de recuperación no hay formulario:
+    /// la View ofrece «Reintentar», que canjea otra vez el mismo enlace.
+    case canjeFallido(ErrorDeRecuperacion)
     /// El enlace ya no sirve: la App abre Enlace inválido de recuperación.
     case enlaceInvalido
     /// «Cancelar» o «atrás»: la sesión de recuperación se cerró. La App vuelve a Iniciar sesión.
@@ -28,6 +31,8 @@ public final class NuevaContrasenaViewModel {
     private let restablecer: RestablecerContrasenaUseCase
     private let cerrarAbandonada: CerrarRecuperacionAbandonadaUseCase
     private var sesion: Sesion?
+    /// R-3: el enlace recibido, para reintentar el canje si falló sin conexión.
+    private var enlace: String?
 
     public init(
         confirmar: ConfirmarRecuperacionDeContrasenaUseCase,
@@ -50,6 +55,7 @@ public final class NuevaContrasenaViewModel {
 
     /// `rugbyapp://recuperar-contrasena?code=…` (ADR 0008).
     public func confirmarEnlace(_ enlace: String) async {
+        self.enlace = enlace
         estado = .confirmando
         do {
             sesion = try await confirmar.ejecutar(enlace: enlace)
@@ -57,8 +63,14 @@ public final class NuevaContrasenaViewModel {
         } catch ErrorDeRecuperacion.enlaceInvalido {
             estado = .enlaceInvalido
         } catch {
-            estado = .error(error as? ErrorDeRecuperacion ?? .desconocido)
+            estado = .canjeFallido(error as? ErrorDeRecuperacion ?? .desconocido) // R-3
         }
+    }
+
+    /// R-3: vuelve a canjear el enlace guardado tras `canjeFallido`.
+    public func reintentarCanje() async {
+        guard case .canjeFallido = estado, let enlace else { return }
+        await confirmarEnlace(enlace)
     }
 
     public func guardar() async {

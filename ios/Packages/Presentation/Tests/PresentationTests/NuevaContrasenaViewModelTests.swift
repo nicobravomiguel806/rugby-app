@@ -43,6 +43,29 @@ final class NuevaContrasenaViewModelTests: XCTestCase {
         XCTAssertEqual(vm.estado, .enlaceInvalido)
     }
 
+    /// R-3: si el canje falla sin conexión (o con un error desconocido), no queda un «Guardar» que no hace nada: se oculta
+    /// el formulario y «Reintentar» canjea otra vez el mismo enlace. Mismo caso en Kotlin.
+    func test_CP166_R3_siElCanjeFallaSinConexionReintentarVuelveACanjearElMismoEnlace() async {
+        let enlace = "rugbyapp://recuperar-contrasena?code=abc"
+        for error in [ErrorDeRecuperacion.sinConexion, .desconocido] {
+            let repositorio = RecuperacionFalsa()
+            repositorio.errorAlConfirmar = error
+            let vm = viewModel(repositorio)
+
+            await vm.confirmarEnlace(enlace)
+            XCTAssertEqual(vm.estado, .canjeFallido(error), "sin formulario: no se puede guardar sin sesión de recuperación")
+
+            repositorio.errorAlConfirmar = nil
+            await vm.reintentarCanje()
+
+            XCTAssertEqual(repositorio.enlaces, [enlace, enlace])
+            XCTAssertEqual(vm.estado, .editando(errores: []))
+            vm.contrasena = "aaaaaaaaaa"
+            await vm.guardar()
+            XCTAssertEqual(vm.estado, .guardada(repositorio.sesion))
+        }
+    }
+
     func test_CP166e_cancelarCierraLaSesionDeRecuperacion() async {
         let repositorio = RecuperacionFalsa()
         let sesiones = SesionFalsa(guardada: repositorio.sesion)

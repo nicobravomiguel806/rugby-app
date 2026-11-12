@@ -32,6 +32,30 @@ class NuevaContrasenaViewModelTest {
         CerrarRecuperacionAbandonadaUseCase(repositorio, Armar.cerrarSesion(sesiones)),
     )
 
+    /**
+     * R-3: si el canje falla sin conexión (o con un error desconocido), no queda un «Guardar» que no hace nada: se oculta
+     * el formulario y «Reintentar» canjea otra vez el mismo enlace. Mismo caso en Swift.
+     */
+    @Test fun `CP-166 R-3 si el canje falla sin conexion reintentar vuelve a canjear el mismo enlace`() {
+        val enlace = "rugbyapp://recuperar-contrasena?code=abc"
+        for (error in listOf(ErrorDeRecuperacion.SinConexion, ErrorDeRecuperacion.Desconocido)) {
+            val repositorio = RecuperacionFalsa().apply { errorAlConfirmar = error }
+            val vm = viewModel(repositorio)
+
+            vm.confirmarEnlace(enlace)
+            assertEquals("sin formulario: no se puede guardar sin sesion de recuperacion", EstadoDeNuevaContrasena.CanjeFallido(error), vm.estado.value)
+
+            repositorio.errorAlConfirmar = null
+            vm.reintentarCanje()
+
+            assertEquals(listOf(enlace, enlace), repositorio.enlaces)
+            assertEquals(EstadoDeNuevaContrasena.Editando(), vm.estado.value)
+            vm.cambiarContrasena("aaaaaaaaaa")
+            vm.guardar()
+            assertEquals(EstadoDeNuevaContrasena.Guardada(repositorio.sesion), vm.estado.value)
+        }
+    }
+
     @Test fun `CP-166 enlace valido pasa a editar y guardar deja la sesion`() {
         val repositorio = RecuperacionFalsa()
         val vm = viewModel(repositorio)

@@ -23,6 +23,11 @@ sealed interface EstadoDeNuevaContrasena {
     /** Contraseña cambiada: la sesión queda iniciada y las demás cerradas. La App consulta el aviso (§3.6). */
     data class Guardada(val sesion: Sesion) : EstadoDeNuevaContrasena
     data class Error(val error: ErrorDeRecuperacion) : EstadoDeNuevaContrasena
+    /**
+     * R-3: el canje falló sin conexión o con un error desconocido. Sin sesión de recuperación no hay formulario: la
+     * Screen ofrece «Reintentar», que canjea otra vez el mismo enlace.
+     */
+    data class CanjeFallido(val error: ErrorDeRecuperacion) : EstadoDeNuevaContrasena
     /** El enlace ya no sirve: la App abre Enlace inválido de recuperación. */
     data object EnlaceInvalido : EstadoDeNuevaContrasena
     /** «Cancelar» o «atrás»: la sesión de recuperación se cerró. La App vuelve a Iniciar sesión. */
@@ -45,12 +50,15 @@ class NuevaContrasenaViewModel(
     private val _estado = MutableStateFlow<EstadoDeNuevaContrasena>(EstadoDeNuevaContrasena.Confirmando)
     val estado: StateFlow<EstadoDeNuevaContrasena> = _estado.asStateFlow()
     private var sesion: Sesion? = null
+    /** R-3: el enlace recibido, para reintentar el canje si falló sin conexión. */
+    private var enlace: String? = null
 
     fun cambiarContrasena(valor: String) = _formulario.update { it.copy(contrasena = valor) }
     fun alternarContrasena() = _formulario.update { it.copy(mostrarContrasena = !it.mostrarContrasena) }
 
     /** `rugbyapp://recuperar-contrasena?code=…` (ADR 0008). */
     fun confirmarEnlace(enlace: String) {
+        this.enlace = enlace
         _estado.value = EstadoDeNuevaContrasena.Confirmando
         viewModelScope.launch {
             _estado.value = try {
@@ -61,9 +69,15 @@ class NuevaContrasenaViewModel(
             } catch (_: ErrorDeRecuperacion.EnlaceInvalido) {
                 EstadoDeNuevaContrasena.EnlaceInvalido
             } catch (e: Exception) {
-                EstadoDeNuevaContrasena.Error(e as? ErrorDeRecuperacion ?: ErrorDeRecuperacion.Desconocido)
+                EstadoDeNuevaContrasena.CanjeFallido(e as? ErrorDeRecuperacion ?: ErrorDeRecuperacion.Desconocido) // R-3
             }
         }
+    }
+
+    /** R-3: vuelve a canjear el enlace guardado tras `CanjeFallido`. */
+    fun reintentarCanje() {
+        val enlace = enlace ?: return
+        if (_estado.value is EstadoDeNuevaContrasena.CanjeFallido) confirmarEnlace(enlace)
     }
 
     fun guardar() {
