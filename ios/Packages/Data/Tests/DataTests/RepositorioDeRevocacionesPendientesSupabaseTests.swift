@@ -123,6 +123,33 @@ final class RepositorioDeRevocacionesPendientesSupabaseTests: XCTestCase {
                        "el aviso no se revoca dos veces")
     }
 
+    /// H-1 (P-4): la misma cuenta inicia sesión mientras dura el refresh y `quitarAviso` borra el aviso. `revocar` relee
+    /// la entrada: no llama a la RPC con la sesión vieja (revocaría la aceptación nueva) y la reescritura por rotación
+    /// no devuelve el aviso al almacén. Mismo caso en Kotlin.
+    func test_CP168_H1_quitarAvisoDuranteElRefreshEvitaLaRpcYLaRotacionNoDevuelveElAviso() async {
+        let m = montar()
+        m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "rt-viejo", versionDelAviso: "v0-borrador", creadaEn: 900), id: "p-1")
+        let (repo, usuario) = (m.repo, usuario)
+        m.servidor.antesDeResponder = { pedido in
+            if pedido.url!.path.hasSuffix("/token") { try await repo.quitarAviso(usuarioId: usuario) }
+        }
+        m.servidor.responder = { pedido in
+            if pedido.url!.path.hasSuffix("/token") { return (200, Self.renovada(at: "at-2", rt: "rt-rotado")) }
+            if pedido.url!.path.hasSuffix("/logout") { return (500, Data()) }
+            return (200, Data("true".utf8))
+        }
+
+        do {
+            try await m.repo.revocar(RevocacionPendiente(id: "p-1", usuarioId: usuario, versionDelAvisoPorRevocar: "v0-borrador", creadaEnSegundos: 900))
+            XCTFail("Se esperaba un error del logout")
+        } catch {}
+
+        XCTAssertEqual(rutas(m.servidor), ["/auth/v1/token?grant_type=refresh_token", "/auth/v1/logout?scope=local"],
+                       "sin RPC del aviso con la sesión vieja")
+        XCTAssertEqual(m.revocaciones.entrada("p-1"), Entrada(usuarioId: usuario, refreshToken: "rt-rotado", versionDelAviso: nil, creadaEn: 900),
+                       "la rotación conserva lo que hay en el almacén (sin aviso)")
+    }
+
     func test_CP167_siElServidorDiceQueLaSesionYaNoValeSeDaPorRevocadaYSeBorra() async throws {
         let respuestas: [(Int, String)] = [
             (401, "{}"), (403, "{}"), (404, "{}"),

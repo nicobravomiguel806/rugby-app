@@ -22,9 +22,13 @@ final class ServidorFalsoDePrueba: @unchecked Sendable {
     private var _pedidos: [URLRequest] = []
     var pedidos: [URLRequest] { candado.lock(); defer { candado.unlock() }; return _pedidos }
     var responder: @Sendable (URLRequest) throws -> (Int, Data) = { _ in (200, Data()) }
+    /// C-02 · Corre antes de responder, ya con el pedido anotado: simula lo que pasa mientras el pedido viaja
+    /// (p. ej. `quitarAviso` durante el refresh, H-1) o un pedido que no termina (plazo total, R-2).
+    var antesDeResponder: (@Sendable (URLRequest) async throws -> Void)?
 
     func fetch(_ pedido: URLRequest) async throws -> (Data, URLResponse) {
-        candado.lock(); _pedidos.append(pedido); let responder = self.responder; candado.unlock()
+        candado.lock(); _pedidos.append(pedido); let responder = self.responder; let antes = antesDeResponder; candado.unlock()
+        if let antes { try await antes(pedido) }
         let (estado, cuerpo) = try responder(pedido)
         return (cuerpo, HTTPURLResponse(url: pedido.url!, statusCode: estado, httpVersion: nil,
                                         headerFields: ["Content-Type": "application/json"])!)

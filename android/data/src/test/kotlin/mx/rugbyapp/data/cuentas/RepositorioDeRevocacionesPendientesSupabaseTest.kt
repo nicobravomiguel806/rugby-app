@@ -138,6 +138,31 @@ class RepositorioDeRevocacionesPendientesSupabaseTest {
         assertEquals("el aviso no se revoca dos veces", entrada("rt-2"), m.revocaciones.entrada("p-1"))
     }
 
+    /**
+     * H-1 (P-4): la misma cuenta inicia sesión mientras dura el refresh y `quitarAviso` borra el aviso. `revocar` relee
+     * la entrada: no llama a la RPC con la sesión vieja (revocaría la aceptación nueva) y la reescritura por rotación no
+     * devuelve el aviso al almacén. Mismo caso en Swift.
+     */
+    @Test fun `CP-168 H-1 quitar aviso durante el refresh evita la RPC y la rotacion no devuelve el aviso`() = runTest {
+        val m = Montaje()
+        m.revocaciones.poner("p-1", entrada("rt-viejo", aviso = "v0-borrador"))
+        m.servidor.responder = { pedido ->
+            when {
+                pedido.esRefresh() -> {
+                    m.repo.quitarAviso(usuario)
+                    respond(renovada("at-2", "rt-rotado"), HttpStatusCode.OK, RespuestasDePrueba.json)
+                }
+                pedido.url.encodedPath.endsWith("/logout") -> respond("", HttpStatusCode.InternalServerError)
+                else -> respond("true", HttpStatusCode.OK, RespuestasDePrueba.json)
+            }
+        }
+
+        esperarFallo { m.repo.revocar(pendiente(aviso = "v0-borrador")) }
+
+        assertEquals("sin RPC del aviso con la sesion vieja", listOf("/auth/v1/token?grant_type=refresh_token", "/auth/v1/logout?scope=local"), rutas(m))
+        assertEquals("la rotacion conserva lo que hay en el almacen (sin aviso)", entrada("rt-rotado"), m.revocaciones.entrada("p-1"))
+    }
+
     @Test fun `CP-167 si el servidor dice que la sesion ya no vale se da por revocada y se borra`() = runTest {
         val respuestas = listOf(
             HttpStatusCode.Unauthorized to "{}", HttpStatusCode.Forbidden to "{}", HttpStatusCode.NotFound to "{}",

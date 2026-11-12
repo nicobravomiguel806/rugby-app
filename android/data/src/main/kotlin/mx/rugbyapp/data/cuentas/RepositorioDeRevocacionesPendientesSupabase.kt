@@ -146,8 +146,12 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
             borrarSinFallar(pendiente.id) // C02-1: no es la cuenta de la pendiente; no se usa
             return
         }
-        if (renovada.refreshToken != entrada.refreshToken) {
-            entrada = entrada.copy(refreshToken = renovada.refreshToken)
+        // H-1 (P-4): el refresh puede tardar y, mientras, la misma cuenta pudo iniciar sesión (`quitarAviso`). Manda lo
+        // que hay ahora en el almacén, no la copia leída al principio: sin aviso, no hay RPC con la sesión vieja.
+        val enAlmacen = leer(pendiente.id)
+        val rotado = renovada.refreshToken != entrada.refreshToken
+        entrada = entrada.copy(refreshToken = renovada.refreshToken, versionDelAviso = enAlmacen?.versionDelAviso)
+        if (rotado && enAlmacen != null) {
             escribir(pendiente.id, entrada) // rotación: si lo siguiente falla, queda el token nuevo
         }
 

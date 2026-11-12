@@ -126,9 +126,13 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
             try? almacen.borrar(id: pendiente.id) // C02-1: no es la cuenta de la pendiente; no se usa
             return
         }
-        if renovada.refreshToken != entrada.refreshToken {
-            entrada = Entrada(usuarioId: entrada.usuarioId, refreshToken: renovada.refreshToken,
-                              versionDelAviso: entrada.versionDelAviso, creadaEn: entrada.creadaEn)
+        // H-1 (P-4): el refresh puede tardar y, mientras, la misma cuenta pudo iniciar sesión (`quitarAviso`). Manda lo
+        // que hay ahora en el almacén, no la copia leída al principio: sin aviso, no hay RPC con la sesión vieja.
+        let enAlmacen = leer(id: pendiente.id)
+        let rotado = renovada.refreshToken != entrada.refreshToken
+        entrada = Entrada(usuarioId: entrada.usuarioId, refreshToken: renovada.refreshToken,
+                          versionDelAviso: enAlmacen?.versionDelAviso, creadaEn: entrada.creadaEn)
+        if rotado, enAlmacen != nil {
             try escribir(entrada, id: pendiente.id) // rotación: si lo siguiente falla, queda el token nuevo
         }
 
