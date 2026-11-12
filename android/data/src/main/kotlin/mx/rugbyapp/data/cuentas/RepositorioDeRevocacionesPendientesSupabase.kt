@@ -14,6 +14,10 @@ import io.ktor.http.contentType
 import java.util.Collections
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -48,11 +52,12 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
     private val cliente: ClienteSupabase,
     private val almacen: AlmacenPorClave,
     private val reloj: Reloj,
+    private val plazoTotalMs: Long = PLAZO_TOTAL_MS,
     private val nuevoId: () -> String,
 ) : RepositorioDeRevocacionesPendientes {
 
     constructor(cliente: ClienteSupabase, almacen: AlmacenPorClave, reloj: Reloj) :
-        this(cliente, almacen, reloj, { UUID.randomUUID().toString() })
+        this(cliente, almacen, reloj, nuevoId = { UUID.randomUUID().toString() })
 
     /** Lo que se guarda cifrado por pendiente. `toString()` nunca imprime el token. */
     internal data class Entrada(
@@ -124,7 +129,11 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
         // Una sola revocación a la vez por entrada: dos usos del mismo refresh token se anularían entre sí.
         if (!enCurso.add(pendiente.id)) throw ErrorDeAutenticacion.Desconocido
         try {
-            revocarSinCompetencia(pendiente)
+            // R-2 (P-4): plazo total para los tres pedidos. Si se pasa, se cancela el que esté en curso y la entrada queda.
+            // En Dispatchers.IO, donde ya viaja la red, el plazo se mide con el reloj real.
+            withContext(Dispatchers.IO) { withTimeout(plazoTotalMs) { revocarSinCompetencia(pendiente) } }
+        } catch (_: TimeoutCancellationException) {
+            throw ErrorDeAutenticacion.SinConexion
         } finally {
             enCurso.remove(pendiente.id)
         }
@@ -288,6 +297,8 @@ class RepositorioDeRevocacionesPendientesSupabase internal constructor(
     internal companion object {
         const val PREFIJO = "revocacion_"
         const val TIEMPO_MAXIMO_POR_PEDIDO_MS = 10_000L
+        /** R-2 (P-4): refresh → RPC → logout, en total, no pasa de 10 s. */
+        const val PLAZO_TOTAL_MS = 10_000L
         /** Códigos con los que el refresh dice que la sesión ya no vale (confirmado por el PO en la Puerta 1). */
         val CODIGOS_DE_SESION_INVALIDA = setOf("refresh_token_not_found", "refresh_token_already_used")
 

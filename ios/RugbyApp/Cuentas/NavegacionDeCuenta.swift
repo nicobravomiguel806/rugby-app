@@ -51,14 +51,23 @@ final class NavegacionDeCuenta {
         if preparacion == nil {
             let contenedor = contenedor
             preparacion = Task {
-                try? await contenedor.cerrarRecuperacionAbandonada.ejecutar()
-                await Self.conTope(ContenedorDeDependencias.topeDelReintentoAlArrancar) {
-                    await contenedor.reintentarRevocaciones.ejecutar()
-                }
+                await Self.prepararConTope(ContenedorDeDependencias.topeDelReintentoAlArrancar,
+                                           cerrarAbandonada: contenedor.cerrarRecuperacionAbandonada,
+                                           reintentar: contenedor.reintentarRevocaciones)
                 contenedor.vigilarLaRed()
             }
         }
         await preparacion?.value
+    }
+
+    /// Recuperación abandonada y revocaciones pendientes, antes de cualquier otra acción y bajo el MISMO tope (P-4, R-2):
+    /// el cierre de la recuperación también reintenta las pendientes y, sin red, no puede alargar el arranque.
+    static func prepararConTope(_ tope: Duration, cerrarAbandonada: CerrarRecuperacionAbandonadaUseCase,
+                                reintentar: ReintentarRevocacionesPendientesUseCase) async {
+        await conTope(tope) {
+            try? await cerrarAbandonada.ejecutar()
+            await reintentar.ejecutar()
+        }
     }
 
     /// Corre `trabajo` hasta `tope`; si se pasa, sigue sin esperarlo (P-4: sin red la app no se bloquea).

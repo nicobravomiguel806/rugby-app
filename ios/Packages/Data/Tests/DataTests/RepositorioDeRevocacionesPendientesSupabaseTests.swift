@@ -175,6 +175,28 @@ final class RepositorioDeRevocacionesPendientesSupabaseTests: XCTestCase {
         }
     }
 
+    /// R-2 (P-4): cada `revocar` (refresh → RPC → logout) tiene un plazo total. Si el servidor no termina, lanza
+    /// `sinConexion` sin esperar más y la entrada queda. Mismo caso en Kotlin.
+    func test_CP167_R2_revocarTienePlazoTotalYSiSePasaLanzaSinConexionYLaEntradaQueda() async {
+        let m = montar()
+        let repo = RepositorioDeRevocacionesPendientesSupabase(cliente: m.cliente, almacen: m.revocaciones, reloj: RelojDePrueba(ahora: 1_000),
+                                                               nuevoId: { "p-1" }, plazoTotal: 0.3)
+        m.revocaciones.poner(Entrada(usuarioId: usuario, refreshToken: "rt", versionDelAviso: nil, creadaEn: 900), id: "p-1")
+        m.servidor.antesDeResponder = { _ in try await Task.sleep(nanoseconds: 5_000_000_000) } // red que no responde
+        m.servidor.responder = { pedido in pedido.url!.path.hasSuffix("/token") ? (200, Self.renovada(at: "at-2", rt: "rt-2")) : (204, Data()) }
+        let inicio = Date()
+
+        do {
+            try await repo.revocar(RevocacionPendiente(id: "p-1", usuarioId: usuario, versionDelAvisoPorRevocar: nil, creadaEnSegundos: 900))
+            XCTFail("Se esperaba sinConexion")
+        } catch {
+            XCTAssertEqual(error as? ErrorDeAutenticacion, .sinConexion)
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(inicio), 3, "no espera más que el plazo total")
+        XCTAssertEqual(m.revocaciones.entrada("p-1")?.refreshToken, "rt")
+    }
+
     func test_CP167_siElServidorDiceQueLaSesionYaNoValeSeDaPorRevocadaYSeBorra() async throws {
         let respuestas: [(Int, String)] = [
             (401, "{}"), (403, "{}"), (404, "{}"),

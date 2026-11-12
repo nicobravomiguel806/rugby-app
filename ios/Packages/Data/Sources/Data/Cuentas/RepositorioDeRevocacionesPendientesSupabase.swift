@@ -52,6 +52,8 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
     /// Códigos con los que el refresh dice que la sesión ya no vale (confirmado por el PO en la Puerta 1).
     static let codigosDeSesionInvalida: Set<String> = ["refresh_token_not_found", "refresh_token_already_used"]
     static let tiempoMaximoPorPedido: TimeInterval = 10
+    /// R-2 (P-4): refresh → RPC → logout, en total, no pasa de 10 s.
+    static let tiempoMaximoTotal: TimeInterval = 10
 
     private let configuracion: ConfiguracionDeSupabase
     private let auth: AuthClient?
@@ -59,6 +61,7 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
     private let almacen: AlmacenDeRevocaciones
     private let reloj: Reloj
     private let nuevoId: @Sendable () -> String
+    private let plazoTotal: TimeInterval
 
     private let candado = NSLock()
     private var enCurso: Set<String> = []
@@ -67,7 +70,9 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
         self.init(cliente: cliente, almacen: almacen, reloj: reloj, nuevoId: { UUID().uuidString.lowercased() })
     }
 
-    init(cliente: ClienteSupabase, almacen: AlmacenDeRevocaciones, reloj: Reloj, nuevoId: @escaping @Sendable () -> String) {
+    init(cliente: ClienteSupabase, almacen: AlmacenDeRevocaciones, reloj: Reloj, nuevoId: @escaping @Sendable () -> String,
+         plazoTotal: TimeInterval = tiempoMaximoTotal) {
+        self.plazoTotal = plazoTotal
         self.configuracion = cliente.configuracion
         self.auth = cliente.auth
         self.fetch = cliente.fetch
@@ -113,6 +118,16 @@ public final class RepositorioDeRevocacionesPendientesSupabase: RepositorioDeRev
         guard libre else { throw ErrorDeAutenticacion.desconocido }
         defer { candado.withLock { _ = enCurso.remove(pendiente.id) } }
 
+        // R-2 (P-4): plazo total para los tres pedidos. Si se pasa, se cancela el que esté en curso y la entrada queda.
+        try await withThrowingTaskGroup(of: Bool.self) { grupo in
+            grupo.addTask { try await self.revocarSinCompetencia(pendiente); return true }
+            grupo.addTask { try await Task.sleep(nanoseconds: UInt64(self.plazoTotal * 1_000_000_000)); return false }
+            defer { grupo.cancelAll() }
+            guard try await grupo.next() == true else { throw ErrorDeAutenticacion.sinConexion }
+        }
+    }
+
+    private func revocarSinCompetencia(_ pendiente: RevocacionPendiente) async throws {
         guard var entrada = leer(id: pendiente.id) else { return } // ya no está: nada que revocar
         // C02-1: el token de una cuenta nunca se usa para otra.
         guard entrada.usuarioId == pendiente.usuarioId else { try? almacen.borrar(id: pendiente.id); return }

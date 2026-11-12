@@ -5,6 +5,8 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import java.io.IOException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonPrimitive
 import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
@@ -189,6 +191,27 @@ class RepositorioDeRevocacionesPendientesSupabaseTest {
             )
             assertEquals("estado $estado", entrada("rt-2"), m.revocaciones.entrada("vieja"))
         }
+    }
+
+    /**
+     * R-2 (P-4): cada `revocar` (refresh → RPC → logout) tiene un plazo total. Si el servidor no termina, lanza
+     * `SinConexion` sin esperar más y la entrada queda. Mismo caso en Swift. Con tiempo real (`runBlocking`).
+     */
+    @Test fun `CP-167 R-2 revocar tiene plazo total y si se pasa lanza sin conexion y la entrada queda`() = runBlocking {
+        val m = Montaje()
+        val repo = RepositorioDeRevocacionesPendientesSupabase(m.cliente, m.revocaciones, Reloj { 1_000 }, 300) { "p-1" }
+        m.revocaciones.poner("p-1", entrada("rt"))
+        m.servidor.responder = { pedido ->
+            delay(5_000) // red que no responde
+            if (pedido.esRefresh()) respond(renovada("at-2", "rt-2"), HttpStatusCode.OK, RespuestasDePrueba.json) else respond("", HttpStatusCode.NoContent)
+        }
+        val inicio = System.nanoTime()
+
+        esperarFallo(ErrorDeAutenticacion.SinConexion) { repo.revocar(pendiente()) }
+
+        val ms = (System.nanoTime() - inicio) / 1_000_000
+        assertTrue("no espera mas que el plazo total ($ms ms)", ms < 3_000)
+        assertEquals("rt", m.revocaciones.entrada("p-1")?.refreshToken)
     }
 
     @Test fun `CP-167 si el servidor dice que la sesion ya no vale se da por revocada y se borra`() = runTest {
