@@ -19,7 +19,8 @@ import mx.rugbyapp.domain.cuentas.Sesion
  *
  * - enviarEnlace: POST /auth/v1/recover con PKCE (`code_challenge`) y `redirect_to=rugbyapp://recuperar-contrasena`
  *   (supabase-kt 3.0.2 sí los manda en `resetPasswordForEmail`). Cualquier respuesta del servidor da el mismo
- *   resultado (AT-11); solo 429 y la falta de red se distinguen.
+ *   resultado (AT-11); solo el 429 por IP (`over_request_rate_limit`) y la falta de red se distinguen. El 429 por envío
+ *   de correo es neutro (H-2).
  * - confirmarEnlace: solo `rugbyapp://recuperar-contrasena` con path vacío; canjea el `code` con el `code_verifier` de
  *   este dispositivo y deja la marca «recuperación en curso» en el almacén cifrado de la sesión.
  * - cambiarContrasena: PUT /auth/v1/user. cerrarOtrasSesiones: POST /auth/v1/logout?scope=others.
@@ -35,7 +36,9 @@ class RepositorioDeRecuperacionSupabase(private val cliente: ClienteSupabase) : 
             throw e
         } catch (e: Exception) {
             when (traducir(e)) {
-                ErrorDeRecuperacion.DemasiadosIntentos -> throw ErrorDeRecuperacion.DemasiadosIntentos
+                // H-2 (C02-8): el límite de envío de correo solo salta si la cuenta existe, así que es neutro. Solo el
+                // límite por IP, igual para todos los correos, se distingue.
+                ErrorDeRecuperacion.DemasiadosIntentos -> if (esLimitePorIP(e)) throw ErrorDeRecuperacion.DemasiadosIntentos
                 ErrorDeRecuperacion.SinConexion -> throw ErrorDeRecuperacion.SinConexion
                 else -> Unit // respuesta neutra: el servidor contestó (AT-11)
             }
@@ -109,6 +112,9 @@ class RepositorioDeRecuperacionSupabase(private val cliente: ClienteSupabase) : 
     internal companion object {
         /** Clave de la marca en el almacén de la sesión. `borrarTodo()` del cierre de sesión también la borra. */
         const val CLAVE_DE_LA_MARCA = "recuperacion_en_curso"
+
+        /** `over_request_rate_limit`: el límite por IP de GoTrue (H-2). */
+        fun esLimitePorIP(e: Throwable): Boolean = (e as? AuthRestException)?.errorCode == AuthErrorCode.OverRequestRateLimit
 
         fun traducir(e: Throwable): ErrorDeRecuperacion = when {
             e is ErrorDeRecuperacion -> e

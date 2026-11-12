@@ -64,9 +64,16 @@ class RepositorioDeRecuperacionSupabaseTest {
         }
     }
 
-    @Test fun `CP-166f recover con 429 da demasiados intentos y sin red sin conexion`() = runTest {
+    /**
+     * H-2 (C02-8, AT-11): el límite de envío de correo solo salta si la cuenta existe, así que da la respuesta neutra.
+     * Solo el límite por IP (igual para todos los correos) da «Demasiados intentos».
+     */
+    @Test fun `CP-166f recover con limite de correo es neutro por IP da demasiados intentos y sin red sin conexion`() = runTest {
         val m = Montaje()
-        m.servidor.responder = { respond("""{"error_code":"over_email_send_rate_limit"}""", HttpStatusCode.TooManyRequests, RespuestasDePrueba.json) }
+        m.servidor.responder = { respond("""{"code":429,"error_code":"over_email_send_rate_limit","msg":"rate limit"}""", HttpStatusCode.TooManyRequests, RespuestasDePrueba.json) }
+        m.repo.enviarEnlace("daniela@ejemplo.mx") // mismo resultado que un correo inexistente
+
+        m.servidor.responder = { respond("""{"code":429,"error_code":"over_request_rate_limit","msg":"rate limit"}""", HttpStatusCode.TooManyRequests, RespuestasDePrueba.json) }
         esperarError(ErrorDeRecuperacion.DemasiadosIntentos) { m.repo.enviarEnlace("daniela@ejemplo.mx") }
 
         m.servidor.responder = { throw IOException("sin red") }

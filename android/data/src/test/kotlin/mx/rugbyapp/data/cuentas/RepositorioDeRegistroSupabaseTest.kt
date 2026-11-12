@@ -97,6 +97,20 @@ class RepositorioDeRegistroSupabaseTest {
         assertEquals("rugbyapp://auth-callback", pedido.url.parameters["redirect_to"])
     }
 
+    /**
+     * C-02 · H-2 (CA-8, C02-8, AT-11): «Reenviar correo» con el límite de envío de correo da la respuesta neutra, como
+     * un correo inexistente. Solo el límite por IP da «Demasiados intentos». Mismo caso en Swift.
+     */
+    @Test fun `C02-8 reenviar con limite de correo es neutro y por IP da demasiados intentos`() = runTest {
+        val servidor = ServidorFalsoDePrueba()
+        val repo = RepositorioDeRegistroSupabase(cliente(servidor))
+        servidor.responder = { respond("""{"code":429,"error_code":"over_email_send_rate_limit","msg":"rate limit"}""", HttpStatusCode.TooManyRequests, json) }
+        repo.reenviarVerificacion("daniela@ejemplo.mx")
+
+        servidor.responder = { respond("""{"code":429,"error_code":"over_request_rate_limit","msg":"rate limit"}""", HttpStatusCode.TooManyRequests, json) }
+        esperarError(ErrorDeRegistro.DemasiadosIntentos) { repo.reenviarVerificacion("daniela@ejemplo.mx") }
+    }
+
     @Test fun `CP-160h el enlace se canjea con el code verifier de este dispositivo y guarda la sesion`() = runTest {
         val servidor = ServidorFalsoDePrueba().apply { responder = { respond(RespuestasDePrueba.usuario(), HttpStatusCode.OK, json) } }
         val almacen = AlmacenEnMemoriaDePrueba()

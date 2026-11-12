@@ -45,9 +45,14 @@ final class RepositorioDeRecuperacionSupabaseTests: XCTestCase {
         }
     }
 
-    func test_CP166f_recoverCon429DaDemasiadosIntentosYSinRedSinConexion() async {
+    /// H-2 (C02-8, AT-11): el límite de envío de correo solo salta si la cuenta existe, así que da la respuesta neutra.
+    /// Solo el límite por IP (igual para todos los correos) da «Demasiados intentos».
+    func test_CP166f_recoverConLimiteDeCorreoEsNeutroPorIPDaDemasiadosIntentosYSinRedSinConexion() async throws {
         let (servidor, _, _, repo) = montar()
-        servidor.responder = { _ in (429, Data(#"{"error_code":"over_email_send_rate_limit"}"#.utf8)) }
+        servidor.responder = { _ in (429, Data(#"{"code":429,"error_code":"over_email_send_rate_limit","msg":"rate limit"}"#.utf8)) }
+        try await repo.enviarEnlace(correo: "daniela@ejemplo.mx") // mismo resultado que un correo inexistente
+
+        servidor.responder = { _ in (429, Data(#"{"code":429,"error_code":"over_request_rate_limit","msg":"rate limit"}"#.utf8)) }
         await esperarError(.demasiadosIntentos) { try await repo.enviarEnlace(correo: "daniela@ejemplo.mx") }
 
         servidor.responder = { _ in throw URLError(.notConnectedToInternet) }

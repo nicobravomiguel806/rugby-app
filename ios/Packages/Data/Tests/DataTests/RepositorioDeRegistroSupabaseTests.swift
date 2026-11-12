@@ -87,6 +87,18 @@ final class RepositorioDeRegistroSupabaseTests: XCTestCase {
         XCTAssertEqual(R.query(pedido, "redirect_to"), "rugbyapp://auth-callback")
     }
 
+    /// C-02 · H-2 (CA-8, C02-8, AT-11): «Reenviar correo» con el límite de envío de correo da la respuesta neutra, como
+    /// un correo inexistente. Solo el límite por IP da «Demasiados intentos». Mismo caso en Kotlin.
+    func test_C02_8_reenviarConLimiteDeCorreoEsNeutroYPorIPDaDemasiadosIntentos() async throws {
+        let servidor = ServidorFalsoDePrueba()
+        let repo = RepositorioDeRegistroSupabase(cliente: cliente(servidor))
+        servidor.responder = { _ in (429, Data(#"{"code":429,"error_code":"over_email_send_rate_limit","msg":"rate limit"}"#.utf8)) }
+        try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx")
+
+        servidor.responder = { _ in (429, Data(#"{"code":429,"error_code":"over_request_rate_limit","msg":"rate limit"}"#.utf8)) }
+        await esperarError(.demasiadosIntentos) { try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx") }
+    }
+
     func test_CP160h_elEnlaceSeCanjeaConElCodeVerifierDeEsteDispositivoYGuardaLaSesion() async throws {
         let servidor = ServidorFalsoDePrueba()
         servidor.responder = { _ in (200, Data(R.usuario().utf8)) }

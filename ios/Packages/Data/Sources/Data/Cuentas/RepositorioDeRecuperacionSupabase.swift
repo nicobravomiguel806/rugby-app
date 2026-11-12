@@ -2,7 +2,8 @@
 // data/.../cuentas/RepositorioDeRecuperacionSupabase.kt.
 //
 // - enviarEnlace: POST /auth/v1/recover con PKCE (`code_challenge`) y `redirect_to=rugbyapp://recuperar-contrasena`.
-//   Cualquier respuesta del servidor da el mismo resultado (AT-11); solo 429 y la falta de red se distinguen.
+//   Cualquier respuesta del servidor da el mismo resultado (AT-11); solo el 429 por IP (`over_request_rate_limit`) y la
+//   falta de red se distinguen. El 429 por envío de correo es neutro (H-2).
 // - confirmarEnlace: solo `rugbyapp://recuperar-contrasena` con path vacío; canjea el `code` con el `code_verifier` de
 //   este dispositivo y deja la marca «recuperación en curso» en el almacén seguro de la sesión.
 // - cambiarContrasena: PUT /auth/v1/user. cerrarOtrasSesiones: POST /auth/v1/logout?scope=others.
@@ -29,7 +30,9 @@ public final class RepositorioDeRecuperacionSupabase: RepositorioDeRecuperacion,
             try await auth.resetPasswordForEmail(correo, redirectTo: ClienteSupabase.urlDeRecuperacion)
         } catch {
             switch Self.traducir(error) {
-            case .demasiadosIntentos: throw ErrorDeRecuperacion.demasiadosIntentos
+            // H-2 (C02-8): el límite de envío de correo solo salta si la cuenta existe, así que es neutro. Solo el
+            // límite por IP, igual para todos los correos, se distingue.
+            case .demasiadosIntentos where Self.esLimitePorIP(error): throw ErrorDeRecuperacion.demasiadosIntentos
             case .sinConexion: throw ErrorDeRecuperacion.sinConexion
             default: return // respuesta neutra: el servidor contestó (AT-11)
             }
@@ -98,6 +101,19 @@ public final class RepositorioDeRecuperacionSupabase: RepositorioDeRecuperacion,
             }
         }
         return resultado
+    }
+
+    /// `over_request_rate_limit`: el límite por IP de GoTrue (H-2). Se lee del código ya decodificado o, si el SDK no
+    /// pudo decodificar el cuerpo, de `error_code` / `code` (texto) en el cuerpo crudo.
+    static func esLimitePorIP(_ error: Error) -> Bool {
+        guard case let AuthError.api(_, codigo, datos, _) = error else { return false }
+        return codigo == .overRequestRateLimit || codigoDeError(datos) == ErrorCode.overRequestRateLimit.rawValue
+    }
+
+    /// GoTrue manda `error_code` (formato sin versión de API) o `code` como texto (versión 2024-01-01).
+    static func codigoDeError(_ cuerpo: Data) -> String? {
+        guard let campos = try? JSONSerialization.jsonObject(with: cuerpo) as? [String: Any] else { return nil }
+        return (campos["error_code"] as? String) ?? (campos["code"] as? String)
     }
 
     static func traducir(_ error: Error) -> ErrorDeRecuperacion {
