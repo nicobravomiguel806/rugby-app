@@ -17,15 +17,20 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
     private let candado = NSLock()
     private var tokenPorRevocar: String?
 
-    public convenience init(configuracion: ConfiguracionDeSupabase, almacen: any AlmacenSeguroDeSesion) {
-        self.init(configuracion: configuracion, almacen: almacen, fetch: { try await URLSession.shared.data(for: $0) })
+    /// C-01 · El cliente compartido de la app (ADR 0006): el mismo que usan registro y consentimiento.
+    public init(cliente: ClienteSupabase) {
+        self.configuracion = cliente.configuracion
+        self.almacen = cliente.almacen
+        self.fetch = cliente.fetch
+        self.auth = cliente.auth
     }
 
-    init(configuracion: ConfiguracionDeSupabase, almacen: any AlmacenSeguroDeSesion, fetch: @escaping ClienteSupabase.Fetch) {
-        self.configuracion = configuracion
-        self.almacen = almacen
-        self.fetch = fetch
-        self.auth = ClienteSupabase.crearAuth(configuracion: configuracion, almacen: almacen, fetch: fetch)
+    public convenience init(configuracion: ConfiguracionDeSupabase, almacen: any AlmacenSeguroDeSesion) {
+        self.init(cliente: ClienteSupabase(configuracion: configuracion, almacen: almacen))
+    }
+
+    convenience init(configuracion: ConfiguracionDeSupabase, almacen: any AlmacenSeguroDeSesion, fetch: @escaping ClienteSupabase.Fetch) {
+        self.init(cliente: ClienteSupabase(configuracion: configuracion, almacen: almacen, fetch: fetch))
     }
 
     public func iniciarSesion(con credencial: CredencialNativa, nonce: String) async throws -> Sesion {
@@ -83,8 +88,13 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
         }
     }
 
+    /// C-01 · `nombre` sale de `user_metadata`: `full_name` (registro con correo, P-4) o `name` (Google). Solo para mostrar.
     static func sesion(de usuario: User) -> Sesion {
-        Sesion(usuarioId: usuario.id.uuidString.lowercased(), correo: usuario.email)
+        let nombre = [usuario.userMetadata["full_name"], usuario.userMetadata["name"]]
+            .lazy
+            .compactMap { $0?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+        return Sesion(usuarioId: usuario.id.uuidString.lowercased(), correo: usuario.email, nombre: nombre)
     }
 
     static func traducir(_ error: Error) -> ErrorDeAutenticacion {

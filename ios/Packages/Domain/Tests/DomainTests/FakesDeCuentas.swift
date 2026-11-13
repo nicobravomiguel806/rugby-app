@@ -71,3 +71,73 @@ final class RepositorioFalso: RepositorioDeSesion, @unchecked Sendable {
         if let errorAlRevocar { throw errorAlRevocar }
     }
 }
+
+// C-01 · Fakes de RepositorioDeRegistro y RepositorioDeConsentimiento. Cuentan las llamadas y guardan lo recibido.
+
+final class RepositorioDeRegistroFalso: RepositorioDeRegistro, @unchecked Sendable {
+    private let candado = NSLock()
+    var errorAlRegistrar: ErrorDeRegistro?
+    var errorAlConfirmar: ErrorDeRegistro?
+    var sesionAlConfirmar = Sesion(usuarioId: "u-1", correo: "daniela@ejemplo.mx", nombre: "Daniela")
+    private(set) var registrados: [DatosDeRegistro] = []
+    private(set) var reenvios: [String] = []
+    private(set) var enlacesRecibidos: [String] = []
+
+    func registrar(_ datos: DatosDeRegistro) async throws -> ResultadoDeRegistro {
+        candado.withLock { registrados.append(datos) }
+        if let errorAlRegistrar { throw errorAlRegistrar }
+        return .enlaceEnviado(correo: datos.correo)
+    }
+
+    func reenviarVerificacion(correo: String) async throws {
+        candado.withLock { reenvios.append(correo) }
+        if let errorAlRegistrar { throw errorAlRegistrar }
+    }
+
+    func confirmarCorreo(enlace: String) async throws -> Sesion {
+        candado.withLock { enlacesRecibidos.append(enlace) }
+        if let errorAlConfirmar { throw errorAlConfirmar }
+        return sesionAlConfirmar
+    }
+}
+
+final class RepositorioDeConsentimientoFalso: RepositorioDeConsentimiento, @unchecked Sendable {
+    private let candado = NSLock()
+    var errorAlAceptar: ErrorDeConsentimiento?
+    var errorAlConsultar: ErrorDeConsentimiento?
+    var errorAlRevocar: ErrorDeConsentimiento?
+    /// H-6 · Se ejecuta durante la consulta, antes de responder (p. ej., llega el enlace del correo a media consulta).
+    var alConsultar: (@Sendable () -> Void)?
+    /// Versiones del aviso que el "servidor" tiene aceptadas (estado vigente).
+    private(set) var aceptadas: Set<String>
+    private(set) var llamadasAAceptar: [(version: String, finalidades: Set<FinalidadSecundaria>)] = []
+    private(set) var versionesConsultadas: [String] = []
+    private(set) var revocaciones: [String] = []
+    private let bitacora: Bitacora?
+
+    init(aceptadas: Set<String> = [], bitacora: Bitacora? = nil) {
+        self.aceptadas = aceptadas
+        self.bitacora = bitacora
+    }
+
+    func revocarAviso(version: String) async throws {
+        bitacora?.anotar("revocarAviso")
+        candado.withLock { revocaciones.append(version) }
+        if let errorAlRevocar { throw errorAlRevocar }
+        _ = candado.withLock { aceptadas.remove(version) }
+    }
+
+    func aceptarAviso(version: String, finalidades: Set<FinalidadSecundaria>) async throws {
+        candado.withLock { llamadasAAceptar.append((version, finalidades)) }
+        if let errorAlAceptar { throw errorAlAceptar }
+        _ = candado.withLock { aceptadas.insert(version) }
+    }
+
+    func avisoAceptado(version: String) async throws -> Bool {
+        bitacora?.anotar("avisoAceptado")
+        candado.withLock { versionesConsultadas.append(version) }
+        alConsultar?()
+        if let errorAlConsultar { throw errorAlConsultar }
+        return candado.withLock { aceptadas.contains(version) }
+    }
+}

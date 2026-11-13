@@ -36,6 +36,9 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"${llaveLocal("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${llaveLocal("SUPABASE_ANON_KEY")}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${llaveLocal("GOOGLE_WEB_CLIENT_ID")}\"")
+        // C-01 · P-5: URL pública del Aviso de Privacidad. Vacía por defecto (configuración pendiente): el enlace del
+        // aviso se muestra deshabilitado. No es un secreto; cuando exista se escribe aquí.
+        buildConfigField("String", "AVISO_DE_PRIVACIDAD_URL", "\"\"")
     }
 
     buildFeatures {

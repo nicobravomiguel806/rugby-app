@@ -75,6 +75,30 @@ La sesión principal de Claude Code es el **orquestador**: llama a los agentes e
 
 Herramientas necesarias en la Mac: Xcode 15.4+, `brew install gitleaks postgresql@16 gradle gh xcodegen supabase/tap/supabase`, Docker Desktop u OrbStack (para `supabase start`), JDK 17 y Android Studio. XcodeGen genera el proyecto de Xcode (ADR 0004). El Android SDK se encuentra con `ANDROID_HOME` o con `android/local.properties` (`sdk.dir=…`, ignorado por git); si el shell no exporta `ANDROID_HOME`, crea ese archivo.
 
+## Modo local (mientras GitHub está suspendido)
+> **Terminó el 2026-11-12:** GitHub volvió. Se conserva como registro y por si se repite una suspensión. Lo que sigue vigente es la regla 6 y la sección «Uso de GitHub».
+
+Rigió del 2026-11-11 al 2026-11-12, por decisión del PO:
+1. **Sin GitHub.** No se hace `git push`, no se usa `gh` y no se cambia el remoto.
+2. **Historias apiladas.** Cada historia nueva sale de la rama de la anterior: C-02 desde `feat/C-01-registro-de-usuario`, y así. No se fusiona nada a `main` local.
+3. **Mismo flujo de agentes:** planificador → programador → seguridad → revisor → corrector. En lugar del CI, la verificación final es `./scripts/verificar.sh --todo` en verde.
+4. **La entrega corre en `fase: local`.**
+   - Deja el contrato en «Listo para PR».
+   - Guarda el cuerpo del PR en `docs/historias/<ID>-pr.md`.
+   - Pasa la historia y su gemela a «En revisión» en Notion, con la nota «pendiente GitHub».
+   - **No** registra Done ni marca el Plan de Pruebas como ejecutado en CI.
+   - La Puerta 2 (merge) se hace cuando vuelva GitHub, con CI real.
+5. **Máximo 4 historias apiladas.** Al llegar a 4, el orquestador avisa al PO y no empieza otra.
+6. **Al volver GitHub:** se abre un PR por historia, en orden. Después de cada squash merge, la siguiente rama se rebasa sobre `main` antes de abrir su PR.
+
+## Uso de GitHub (para evitar otra suspensión)
+Desde el 2026-11-12, por decisión del PO, después de la suspensión de la cuenta. Aplican al orquestador y a todos los agentes:
+1. **Máximo 1 reintento del CI** por ejecución fallida. Si no hay runners de macOS, se espera; nunca se relanza en bucle.
+2. **Vigilar el CI con intervalos de 60 s o más** (`gh run watch --interval 60`). Nunca sondeo continuo.
+3. **Push solo al abrir el PR y una vez por ronda de corrección**, no por cada commit.
+4. **Un PR a la vez.** Las historias apiladas se entregan en orden: se espera el CI y el merge de cada una antes de abrir el PR de la siguiente.
+5. **Solo la cuenta `nicobravomiguel806`.** Comprueba `gh auth status` antes de usar `gh` o hacer push.
+
 ## Orden del Sprint 3 (corte en S5)
 Mitad del MVP: S0 a S5 suman **157 de 302 puntos**. Ya están en Done 12 (SP-01, SP-02, SP-03 y T-01). Quedan **145**.
 

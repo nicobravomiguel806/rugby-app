@@ -45,6 +45,9 @@ targets:
         INFOPLIST_FILE: RugbyApp/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
+        # C-01 · P-5: URL pública del Aviso de Privacidad (Info.plist › AvisoDePrivacidadURL). Vacía por defecto:
+        # configuración pendiente; el enlace del aviso se muestra deshabilitado. No es un secreto.
+        AVISO_DE_PRIVACIDAD_URL: ""
     dependencies:
       - package: Domain
       - package: Data

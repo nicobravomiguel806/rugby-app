@@ -68,3 +68,68 @@ class RepositorioFalso(private val bitacora: Bitacora, guardada: Sesion? = null)
         errorAlRevocar?.let { throw it }
     }
 }
+
+// C-01 · Fakes de RepositorioDeRegistro y RepositorioDeConsentimiento. Cuentan las llamadas y guardan lo recibido.
+
+class RepositorioDeRegistroFalso : RepositorioDeRegistro {
+    var errorAlRegistrar: ErrorDeRegistro? = null
+    var errorAlConfirmar: ErrorDeRegistro? = null
+    var sesionAlConfirmar = Sesion("u-1", "daniela@ejemplo.mx", nombre = "Daniela")
+    val registrados = mutableListOf<DatosDeRegistro>()
+    val reenvios = mutableListOf<String>()
+    val enlacesRecibidos = mutableListOf<String>()
+
+    override suspend fun registrar(datos: DatosDeRegistro): ResultadoDeRegistro {
+        registrados += datos
+        errorAlRegistrar?.let { throw it }
+        return ResultadoDeRegistro.EnlaceEnviado(datos.correo)
+    }
+
+    override suspend fun reenviarVerificacion(correo: String) {
+        reenvios += correo
+        errorAlRegistrar?.let { throw it }
+    }
+
+    override suspend fun confirmarCorreo(enlace: String): Sesion {
+        enlacesRecibidos += enlace
+        errorAlConfirmar?.let { throw it }
+        return sesionAlConfirmar
+    }
+}
+
+class RepositorioDeConsentimientoFalso(
+    aceptadas: Set<String> = emptySet(),
+    private val bitacora: Bitacora? = null,
+) : RepositorioDeConsentimiento {
+    var errorAlAceptar: ErrorDeConsentimiento? = null
+    var errorAlConsultar: ErrorDeConsentimiento? = null
+    var errorAlRevocar: ErrorDeConsentimiento? = null
+    /** H-6 · Se ejecuta durante la consulta, antes de responder (p. ej., llega el enlace del correo a media consulta). */
+    var alConsultar: (() -> Unit)? = null
+    /** Versiones del aviso que el "servidor" tiene aceptadas (estado vigente). */
+    val aceptadas = aceptadas.toMutableSet()
+    val llamadasAAceptar = mutableListOf<Pair<String, Set<FinalidadSecundaria>>>()
+    val versionesConsultadas = mutableListOf<String>()
+    val revocaciones = mutableListOf<String>()
+
+    override suspend fun revocarAviso(version: String) {
+        bitacora?.anotar("revocarAviso")
+        revocaciones += version
+        errorAlRevocar?.let { throw it }
+        aceptadas -= version
+    }
+
+    override suspend fun aceptarAviso(version: String, finalidades: Set<FinalidadSecundaria>) {
+        llamadasAAceptar += version to finalidades
+        errorAlAceptar?.let { throw it }
+        aceptadas += version
+    }
+
+    override suspend fun avisoAceptado(version: String): Boolean {
+        bitacora?.anotar("avisoAceptado")
+        versionesConsultadas += version
+        alConsultar?.invoke()
+        errorAlConsultar?.let { throw it }
+        return version in aceptadas
+    }
+}
