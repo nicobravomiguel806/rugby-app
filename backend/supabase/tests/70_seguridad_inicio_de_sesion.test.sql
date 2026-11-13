@@ -4,6 +4,8 @@
 -- «Revocación pendiente en el dispositivo · Revocar su aviso (RPC): ✅ solo la de su usuarioId» y
 -- «anon · Revocar su aviso (RPC): ❌». Casos C02-S*: los de abuso DEBEN negar; los C02-SP* son controles que DEBEN permitir.
 -- Autosuficiente: usuarios …0070 (A, dueño de la pendiente) y …0071 (B, otra cuenta), sin perfiles; se revierte.
+-- Ronda 3 (ADR 0011): la revocación pendiente ya no existe. Las pruebas de arriba siguen valiendo para la RPC, que ahora
+-- solo se llama en línea con la sesión vigente («No acepto» con red); C02-S4/S5 quedan como registro de H-1/H-9.
 \set ON_ERROR_STOP on
 set client_min_messages = notice;
 reset role;
@@ -128,5 +130,35 @@ select tests.ok(tests.valor($$revocar_aviso_de_privacidad('v0-borrador')$$)
                 'C02-S5b (documenta H-9) La pendiente revoca aunque la persona haya vuelto a aceptar después: P-4 depende de quitarAviso al aceptar');
 select tests.ok((select bool_and(accepted_at is not null) from privacy_consents where kind = 'aviso'),
                 'C02-S5c (mitigación H-11) Cada fila del aviso tiene hora del servidor: se puede comparar con la hora del rechazo');
+
+-- ── Ronda 3 (ADR 0011): «No acepto» con red y el aviso que solo exige la app ─────────────────────────────────────
+-- Control ✅: con la sesión vigente, «No acepto» registra la revocación a nombre de auth.uid() con hora del servidor.
+select tests.como_en_sesion('00000000-0000-0000-0000-000000000070', 'sesion-a-r3');
+select tests.ok(tests.valor($$aceptar_aviso_de_privacidad('v0-borrador', '{}')$$), 'C02-SP7a (preparación) A acepta el aviso en línea');
+select tests.ok(tests.valor($$revocar_aviso_de_privacidad('v0-borrador')$$)
+                and (select granted = false and user_id = '00000000-0000-0000-0000-000000000070' and accepted_at = now()
+                     from privacy_consents where kind = 'aviso' order by accepted_at desc, granted asc limit 1)
+                and tests.valor($$not aviso_de_privacidad_aceptado('v0-borrador')$$),
+                'C02-SP7 (CP-168a, ADR 0011) «No acepto» con red: la revocación es de auth.uid(), con now(), y el aviso deja de estar vigente');
+select tests.como_en_sesion('00000000-0000-0000-0000-000000000071', 'sesion-b');
+select tests.ok(tests.valor($$aviso_de_privacidad_aceptado('v0-borrador')$$),
+                'C02-S6 (CP-168a) El «No acepto» de A no cambia el aviso de B');
+reset role;
+
+-- Evidencia de H-14 (§6, ronda 3): el servidor no exige el aviso vigente. A, con el aviso revocado, crea su perfil.
+-- Es el residual aceptado en C-01 §3.3 (A-03); el bloqueo del aviso vive solo en la app. Si A-03 lo lleva a RLS, se invierte.
+insert into communities (id, name) values ('c0000000-0000-0000-0000-000000000070', 'Seguridad C-02');
+set role authenticated;
+select tests.como_en_sesion('00000000-0000-0000-0000-000000000070', 'sesion-a-r3');
+select tests.ok(tests.valor($$not aviso_de_privacidad_aceptado('v0-borrador')$$),
+                'C02-S7a (preparación) A no tiene el aviso vigente');
+do $$ begin
+  insert into profiles (id, community_id, full_name, birth_date)
+  values ('00000000-0000-0000-0000-000000000070', 'c0000000-0000-0000-0000-000000000070', 'Persona C-02', date '1990-01-01');
+  raise notice 'ok - C02-S7 (documenta H-14, residual A-03) Sin aviso vigente, el servidor deja crear el perfil: el aviso solo lo exige la app';
+exception when others then
+  raise notice 'not ok - C02-S7 (el servidor ya exige el aviso: H-14 cambió, invertir esta prueba) [%]', sqlerrm;
+end $$;
+reset role;
 
 rollback;
