@@ -51,6 +51,7 @@ private struct HojaDeCuenta: View {
         }
         // Sin gesto para descartar el aviso (CA-9) ni Nueva contraseña (P-7: salir es «Cancelar»).
         .interactiveDismissDisabled(navegacion.sinGestoParaCerrar)
+        .onAppear { navegacion.irAEnlaceInvalidoSiElCanjeFallo() } // R-6: el canje pudo fallar antes de presentarse
         .onChange(of: navegacion.registro.estado) { _, estado in navegacion.cambioEnRegistro(estado) }
         .onChange(of: navegacion.acceso.estado) { _, estado in navegacion.cambioEnAcceso(estado) }
         .onChange(of: navegacion.aviso.estado) { _, estado in Task { await navegacion.cambioEnAviso(estado) } }

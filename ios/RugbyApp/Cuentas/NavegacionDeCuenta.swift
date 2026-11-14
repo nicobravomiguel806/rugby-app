@@ -123,8 +123,9 @@ final class NavegacionDeCuenta {
             if ruta.last != .verifica { ruta.append(.verifica) }
         case let .sesionIniciada(sesion):
             Task { await trasIniciarSesion(sesion, desdeRegistro: true) }
-        case .error(.enlaceInvalido):
+        case .error(.enlaceInvalido) where ruta.last == .verifica:
             // C-02 · CA-8: pantalla Enlace inválido. Si la app se abrió desde el enlace no conoce el correo y lo pide.
+            // R-6: solo desde Verifica tu correo (donde se canjea), así llegar dos veces no la repite.
             let correo = registro.correo.trimmingCharacters(in: .whitespacesAndNewlines)
             enlaceInvalido = contenedor.enlaceInvalidoViewModel(tipo: .verificacion, correoConocido: correo.isEmpty ? nil : correo)
             ruta = [.enlaceInvalido]
@@ -169,6 +170,7 @@ final class NavegacionDeCuenta {
         mostrarCuenta = true
         if ruta.last != .verifica { ruta = [.registro, .verifica] }
         await registro.confirmarEnlace(enlace)
+        irAEnlaceInvalidoSiElCanjeFallo()
     }
 
     /// C-02 · `rugbyapp://recuperar-contrasena?code=…`. Espera al arranque: si no, la recuperación abandonada de antes
@@ -181,11 +183,20 @@ final class NavegacionDeCuenta {
         nuevaContrasena = contenedor.nuevaContrasenaViewModel()
         ruta = [.nuevaContrasena]
         await nuevaContrasena.confirmarEnlace(enlace)
+        irAEnlaceInvalidoSiElCanjeFallo()
+    }
+
+    /// C-02 · R-6 (CA-8): Enlace inválido se deriva del estado actual de los ViewModel que guarda esta navegación, no de
+    /// un cambio observado por la vista. En frío el canje falla antes de que la hoja se presente y su `.onChange` no se
+    /// entera. Se llama al terminar el canje y al aparecer la hoja; si ya se navegó, no hace nada.
+    func irAEnlaceInvalidoSiElCanjeFallo() {
+        if registro.estado == .error(.enlaceInvalido) { cambioEnRegistro(registro.estado) }
+        if nuevaContrasena.estado == .enlaceInvalido { cambioEnNuevaContrasena(nuevaContrasena.estado) }
     }
 
     func cambioEnNuevaContrasena(_ estado: EstadoDeNuevaContrasena) {
         switch estado {
-        case .enlaceInvalido:
+        case .enlaceInvalido where ruta.last == .nuevaContrasena: // R-6: solo desde Nueva contraseña, una vez
             enlaceInvalido = contenedor.enlaceInvalidoViewModel(tipo: .recuperacion, correoConocido: nil)
             ruta = [.enlaceInvalido]
         case let .guardada(sesion):
