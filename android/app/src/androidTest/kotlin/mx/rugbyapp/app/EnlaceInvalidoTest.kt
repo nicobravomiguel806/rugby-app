@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -33,9 +34,13 @@ class EnlaceInvalidoTest {
 
     private fun hay(texto: String) = compose.onAllNodesWithText(texto, substring = true).fetchSemanticsNodes().isNotEmpty()
 
+    /** R-6: espera un tag que solo existe en Enlace inválido (el texto también sale en Verifica tu correo). */
+    private fun hayTag(tag: String) = compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+
     @Test fun cp169_enFrioUnEnlaceVencidoPideElCorreoSinTextoTecnico() {
         abrirEnFrio("rugbyapp://auth-callback?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired").use {
-            compose.waitUntil(20_000) { hay("Este enlace ya no es válido o expiró") }
+            compose.waitUntil(20_000) { hayTag("enlaceInvalido.correo") }
+            check(hay("Este enlace ya no es válido o expiró"))
             compose.onNodeWithTag("enlaceInvalido.correo").assertIsDisplayed()
             compose.onNodeWithTag("enlaceInvalido.reenviar").assertIsDisplayed()
             for (tecnico in listOf("otp_expired", "access_denied", "Email link is invalid", "error_code")) {
@@ -46,7 +51,8 @@ class EnlaceInvalidoTest {
 
     @Test fun cp169_unEnlaceDeRecuperacionVencidoOfrecePedirOtroEnlace() {
         abrirEnFrio("rugbyapp://recuperar-contrasena?error=access_denied&error_code=otp_expired").use {
-            compose.waitUntil(20_000) { hay("Este enlace ya no es válido o expiró") }
+            compose.waitUntil(20_000) { hayTag("enlaceInvalido.pedirOtro") }
+            check(hay("Este enlace ya no es válido o expiró"))
             compose.onNodeWithTag("enlaceInvalido.pedirOtro").performClick()
             compose.waitUntil(5_000) { hay("Recuperar contraseña") }
         }
