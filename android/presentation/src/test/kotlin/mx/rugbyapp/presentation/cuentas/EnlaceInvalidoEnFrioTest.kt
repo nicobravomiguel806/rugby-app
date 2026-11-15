@@ -27,6 +27,10 @@ import org.junit.Test
  * estado. La navegación de MainActivity lee el estado actual con `collectAsState` y lo atiende en un `LaunchedEffect` al
  * componerse, así que el resultado del canje no se puede perder: el primer observador que llega tarde recibe el estado de
  * Enlace inválido. Espejo en iOS: ios/RugbyAppTests/EnlaceInvalidoEnFrioTests.swift (allí lo prueba la navegación).
+ *
+ * Alcance (R-11): esta prueba solo comprueba que el `StateFlow` del ViewModel conserva el estado de Enlace inválido
+ * aunque nadie lo observe todavía. No prueba la navegación de `MainActivity`; esa la cubre la prueba instrumentada
+ * `android/app/src/androidTest/kotlin/mx/rugbyapp/app/EnlaceInvalidoTest.kt`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EnlaceInvalidoEnFrioTest {
