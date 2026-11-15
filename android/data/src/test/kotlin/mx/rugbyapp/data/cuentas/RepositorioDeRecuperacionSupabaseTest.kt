@@ -106,6 +106,18 @@ class RepositorioDeRecuperacionSupabaseTest {
         assertFalse(m.repo.recuperacionEnCurso())
     }
 
+    /** H-18 (CP-169 en frío, CI sin configuración): el enlace con error se revisa antes de exigir el cliente. */
+    @Test fun `CP-169 H-18 sin configuracion el enlace vencido da enlace invalido`() = runTest {
+        val servidor = ServidorFalsoDePrueba()
+        val repo = RepositorioDeRecuperacionSupabase(RespuestasDePrueba.cliente(servidor, config = ConfiguracionDeSupabase("", "")))
+
+        esperarError(ErrorDeRecuperacion.EnlaceInvalido) { repo.confirmarEnlace("rugbyapp://recuperar-contrasena?error=access_denied&error_code=otp_expired") }
+        esperarError(ErrorDeRecuperacion.EnlaceInvalido) { repo.confirmarEnlace("rugbyapp://auth-callback?code=x") }
+        esperarError(ErrorDeRecuperacion.Desconocido) { repo.confirmarEnlace("rugbyapp://recuperar-contrasena?code=valido") }
+        assertTrue(servidor.pedidos.isEmpty())
+        assertFalse(repo.recuperacionEnCurso())
+    }
+
     @Test fun `CP-166d canje valido da la sesion y deja la marca en curso`() = runTest {
         val m = Montaje()
         pedirEnlace(m)

@@ -168,6 +168,17 @@ class RepositorioDeRegistroSupabaseTest {
         assertTrue(servidor.pedidos.none { it.first.url.encodedPath.startsWith("/auth/v1/token") })
     }
 
+    /** H-18 (CP-169 en frío, CI sin configuración): el enlace con error se revisa antes de exigir el cliente. */
+    @Test fun `CP-169 H-18 sin configuracion el enlace vencido da enlace invalido`() = runTest {
+        val servidor = ServidorFalsoDePrueba()
+        val repo = RepositorioDeRegistroSupabase(cliente(servidor, config = ConfiguracionDeSupabase("", "")))
+
+        esperarError(ErrorDeRegistro.EnlaceInvalido) { repo.confirmarCorreo("rugbyapp://auth-callback?error=access_denied&error_code=otp_expired") }
+        esperarError(ErrorDeRegistro.EnlaceInvalido) { repo.confirmarCorreo("com.googleusercontent.apps.123:/oauth?code=x") }
+        esperarError(ErrorDeRegistro.Desconocido) { repo.confirmarCorreo("rugbyapp://auth-callback?code=valido") }
+        assertTrue(servidor.pedidos.isEmpty())
+    }
+
     @Test fun `configuracion vacia no usa la red`() = runTest {
         val servidor = ServidorFalsoDePrueba()
         val repo = RepositorioDeRegistroSupabase(cliente(servidor, config = ConfiguracionDeSupabase("", "")))

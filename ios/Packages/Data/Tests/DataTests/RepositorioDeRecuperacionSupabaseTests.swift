@@ -86,6 +86,21 @@ final class RepositorioDeRecuperacionSupabaseTests: XCTestCase {
         XCTAssertFalse(enCurso)
     }
 
+    /// H-18 (CP-169 en frío, CI sin configuración): el enlace con error se revisa antes de exigir el cliente.
+    func test_CP169_H18_sinConfiguracionElEnlaceVencidoDaEnlaceInvalido() async {
+        let servidor = ServidorFalsoDePrueba()
+        let almacen = AlmacenEnMemoriaDePrueba()
+        let cliente = ClienteSupabase(configuracion: ConfiguracionDeSupabase(url: "", anonKey: ""), almacen: almacen, fetch: servidor.fetch)
+        let repo = RepositorioDeRecuperacionSupabase(cliente: cliente)
+
+        await esperarError(.enlaceInvalido) { _ = try await repo.confirmarEnlace(enlace: "rugbyapp://recuperar-contrasena?error=access_denied&error_code=otp_expired") }
+        await esperarError(.enlaceInvalido) { _ = try await repo.confirmarEnlace(enlace: "rugbyapp://auth-callback?code=x") }
+        await esperarError(.desconocido) { _ = try await repo.confirmarEnlace(enlace: "rugbyapp://recuperar-contrasena?code=valido") }
+        XCTAssertTrue(servidor.pedidos.isEmpty)
+        let enCurso = await repo.recuperacionEnCurso()
+        XCTAssertFalse(enCurso)
+    }
+
     func test_CP166d_canjeValidoDaLaSesionYDejaLaMarcaEnCurso() async throws {
         let (servidor, _, cliente, repo) = montar()
         try await repo.enviarEnlace(correo: "daniela@ejemplo.mx") // guarda el code_verifier

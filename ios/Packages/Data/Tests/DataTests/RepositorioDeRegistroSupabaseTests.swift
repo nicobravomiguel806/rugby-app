@@ -155,6 +155,17 @@ final class RepositorioDeRegistroSupabaseTests: XCTestCase {
         XCTAssertTrue(servidor.pedidos.isEmpty)
     }
 
+    /// H-18 (CP-169 en frío, CI sin configuración): el enlace con error se revisa antes de exigir el cliente.
+    func test_CP169_H18_sinConfiguracionElEnlaceVencidoDaEnlaceInvalido() async {
+        let servidor = ServidorFalsoDePrueba()
+        let repo = RepositorioDeRegistroSupabase(cliente: cliente(servidor, configuracion: ConfiguracionDeSupabase(url: "", anonKey: "")))
+
+        await esperarError(.enlaceInvalido) { _ = try await repo.confirmarCorreo(enlace: "rugbyapp://auth-callback?error=access_denied&error_code=otp_expired") }
+        await esperarError(.enlaceInvalido) { _ = try await repo.confirmarCorreo(enlace: "com.googleusercontent.apps.123:/oauth?code=x") }
+        await esperarError(.desconocido) { _ = try await repo.confirmarCorreo(enlace: "rugbyapp://auth-callback?code=valido") }
+        XCTAssertTrue(servidor.pedidos.isEmpty)
+    }
+
     func test_configuracionVaciaNoUsaLaRed() async {
         let servidor = ServidorFalsoDePrueba()
         let repo = RepositorioDeRegistroSupabase(cliente: cliente(servidor, configuracion: ConfiguracionDeSupabase(url: "", anonKey: "")))
