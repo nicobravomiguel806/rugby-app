@@ -77,11 +77,13 @@ class RepositorioDeRegistroSupabase(private val cliente: ClienteSupabase) : Repo
     }
 
     override suspend fun confirmarCorreo(enlace: String): Sesion {
-        val auth = cliente.supabase?.auth ?: throw ErrorDeRegistro.Desconocido
+        // H-18: el enlace y su error se revisan antes de exigir el cliente (sin configuración, un enlace vencido sigue
+        // siendo inválido).
         val parametros = parametrosDelEnlace(enlace) ?: throw ErrorDeRegistro.EnlaceInvalido
         // Supabase pone el error en el enlace si venció o ya se usó (p. ej. error_code=otp_expired).
         if (listOf("error", "error_code", "error_description").any { it in parametros }) throw ErrorDeRegistro.EnlaceInvalido
         val codigo = parametros["code"]?.takeIf { it.isNotBlank() } ?: throw ErrorDeRegistro.EnlaceInvalido
+        val auth = cliente.supabase?.auth ?: throw ErrorDeRegistro.Desconocido
         val sesion = try {
             auth.exchangeCodeForSession(codigo)
         } catch (e: CancellationException) {

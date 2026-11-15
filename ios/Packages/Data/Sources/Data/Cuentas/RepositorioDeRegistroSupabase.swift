@@ -49,8 +49,14 @@ public final class RepositorioDeRegistroSupabase: RepositorioDeRegistro, @unchec
     }
 
     public func confirmarCorreo(enlace: String) async throws -> Sesion {
-        guard let auth else { throw ErrorDeRegistro.desconocido }
+        // H-18: el enlace y su error se revisan antes de exigir el cliente (sin configuración, un enlace vencido sigue
+        // siendo inválido). Supabase pone el error en el enlace si venció o ya se usó (p. ej. error_code=otp_expired).
         guard let url = URL(string: enlace), Self.esEnlaceDeVerificacion(url) else { throw ErrorDeRegistro.enlaceInvalido }
+        let parametros = RepositorioDeRecuperacionSupabase.parametros(de: url)
+        if ["error", "error_code", "error_description"].contains(where: { parametros[$0] != nil }) || (parametros["code"] ?? "").isEmpty {
+            throw ErrorDeRegistro.enlaceInvalido
+        }
+        guard let auth else { throw ErrorDeRegistro.desconocido }
         do {
             let sesion = try await auth.session(from: url)
             return RepositorioDeSesionSupabase.sesion(de: sesion.user)

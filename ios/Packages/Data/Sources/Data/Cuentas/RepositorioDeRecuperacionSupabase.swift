@@ -40,13 +40,15 @@ public final class RepositorioDeRecuperacionSupabase: RepositorioDeRecuperacion,
     }
 
     public func confirmarEnlace(enlace: String) async throws -> Sesion {
-        guard let auth else { throw ErrorDeRecuperacion.desconocido }
+        // H-18: el enlace y su error se revisan antes de exigir el cliente (sin configuración, un enlace vencido sigue
+        // siendo inválido).
         guard let url = URL(string: enlace), ClienteSupabase.esEnlaceDeRecuperacion(url) else { throw ErrorDeRecuperacion.enlaceInvalido }
         let parametros = Self.parametros(de: url)
         // Supabase pone el error en el enlace si venció o ya se usó (p. ej. error_code=otp_expired).
         if ["error", "error_code", "error_description"].contains(where: { parametros[$0] != nil }) || (parametros["code"] ?? "").isEmpty {
             throw ErrorDeRecuperacion.enlaceInvalido
         }
+        guard let auth else { throw ErrorDeRecuperacion.desconocido }
         let sesion: Session
         do {
             sesion = try await auth.session(from: url)

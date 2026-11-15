@@ -46,12 +46,14 @@ class RepositorioDeRecuperacionSupabase(private val cliente: ClienteSupabase) : 
     }
 
     override suspend fun confirmarEnlace(enlace: String): Sesion {
-        val auth = cliente.supabase?.auth ?: throw ErrorDeRecuperacion.Desconocido
+        // H-18: el enlace y su error se revisan antes de exigir el cliente (sin configuración, un enlace vencido sigue
+        // siendo inválido).
         if (!ClienteSupabase.esEnlaceDeRecuperacion(enlace)) throw ErrorDeRecuperacion.EnlaceInvalido
         val parametros = ClienteSupabase.parametrosDe(enlace)
         // Supabase pone el error en el enlace si venció o ya se usó (p. ej. error_code=otp_expired).
         if (listOf("error", "error_code", "error_description").any { it in parametros }) throw ErrorDeRecuperacion.EnlaceInvalido
         val codigo = parametros["code"]?.takeIf { it.isNotBlank() } ?: throw ErrorDeRecuperacion.EnlaceInvalido
+        val auth = cliente.supabase?.auth ?: throw ErrorDeRecuperacion.Desconocido
         val sesion = try {
             auth.exchangeCodeForSession(codigo)
         } catch (e: CancellationException) {
