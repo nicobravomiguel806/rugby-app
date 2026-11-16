@@ -118,6 +118,16 @@ jobs:
           echo "IOS_DESTINATION=$DESTINO" >> "$GITHUB_ENV"
       - name: Build + pruebas en simulador (CA-2 / CP-111)
         run: ./ios/scripts/build-app.sh
+      # C-02 (PO 2026-11-15): si fallan las pruebas, sube el .xcresult (capturas y árbol de accesibilidad) para diagnosticar.
+      # xcodebuild lo deja en DerivedData/Logs/Test porque build-app.sh usa -derivedDataPath ios/build/DerivedData.
+      - name: Subir .xcresult si falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-xcresult
+          path: ios/build/DerivedData/Logs/Test/*.xcresult
+          retention-days: 7
+          if-no-files-found: warn
 
   # AN-T-03 · compila la app de Android y corre la prueba instrumentada en un emulador con API 29 (CA-7 / CP-111).
   # No es requerido todavía: el PO lo agrega a la protección de main después de la primera corrida (P-7).
