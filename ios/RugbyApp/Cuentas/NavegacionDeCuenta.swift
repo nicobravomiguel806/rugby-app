@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import Domain
 import Presentation
 
@@ -28,6 +29,9 @@ final class NavegacionDeCuenta {
     private(set) var llegoUnEnlace = false
     /// C-02 · Ronda 2+3: cuántos canjes de enlaces del correo se iniciaron en esta ejecución (uno por enlace).
     private(set) var canjesIniciados = 0
+    /// Enlaces del correo ya recibidos en esta ejecución (solo en memoria, nunca se registran): si la misma URL llega
+    /// por `connectionOptions` y por `onOpenURL`, el segundo no vuelve a canjear.
+    private var enlacesRecibidos: Set<String> = []
 
     private let contenedor: ContenedorDeDependencias
     /// C-02 · §3.6: la recuperación abandonada se cierra antes de cualquier otra acción (hasta 10 s, R-2).
@@ -168,7 +172,9 @@ final class NavegacionDeCuenta {
     /// conexión de la escena (arranque en frío). Devuelve la tarea del canje, o `nil` si la URL no es del correo.
     @discardableResult
     func recibirURL(_ url: URL, camino: CaminoDelEnlace) -> Task<Void, Never>? {
-        switch ClaseDeEnlace(url) {
+        let clase = ClaseDeEnlace(url)
+        RegistroDeEnlaces.logger.notice("llega por \(camino.rawValue, privacy: .public): enlace=\(clase.rawValue, privacy: .public) error=\(ClaseDeEnlace.traeError(url), privacy: .public)")
+        switch clase {
         case .verificacion:
             anotarEnlace() // H-6: antes de la tarea, para que alArrancar no pida el aviso
             return Task { await recibirEnlace(url.absoluteString) }
@@ -183,6 +189,7 @@ final class NavegacionDeCuenta {
     /// `rugbyapp://auth-callback?code=…`.
     func recibirEnlace(_ enlace: String) async {
         anotarEnlace()
+        guard esNuevo(enlace, clase: .verificacion) else { return }
         await prepararArranque()
         empiezaEnAcceso = false
         mostrarCuenta = true
@@ -196,6 +203,7 @@ final class NavegacionDeCuenta {
     /// podría cerrar la sesión recién canjeada.
     func recibirEnlaceDeRecuperacion(_ enlace: String) async {
         anotarEnlace()
+        guard esNuevo(enlace, clase: .recuperacion) else { return }
         await prepararArranque()
         empiezaEnAcceso = false
         mostrarCuenta = true
@@ -237,6 +245,15 @@ final class NavegacionDeCuenta {
     }
 
     // MARK: - Apoyo
+
+    /// C-02 · Ronda 2+3: el canje de un enlace ocurre una sola vez. Se comprueba antes de cualquier `await`, así que dos
+    /// entregas seguidas de la misma URL no pueden pasar las dos.
+    private func esNuevo(_ enlace: String, clase: ClaseDeEnlace) -> Bool {
+        let nuevo = enlacesRecibidos.insert(enlace).inserted
+        let url = URL(string: enlace)
+        RegistroDeEnlaces.logger.notice("canje: enlace=\(clase.rawValue, privacy: .public) error=\(url.map(ClaseDeEnlace.traeError) ?? false, privacy: .public) canje=\(nuevo ? "nuevo" : "repetido", privacy: .public)")
+        return nuevo
+    }
 
     /// `desdeRegistro`: muestra Cuenta activada. `cerrarHoja` (C-02, Iniciar sesión y Nueva contraseña): se cierra la
     /// hoja y queda el Inicio provisional (§3.6; la barra de pestañas llega en C-08). Acceso no cierra la hoja.
