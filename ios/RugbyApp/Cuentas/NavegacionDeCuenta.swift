@@ -31,8 +31,9 @@ final class NavegacionDeCuenta {
     /// C-02 · Ronda 2+3: cuántos canjes de enlaces del correo se iniciaron en esta ejecución (uno por enlace).
     private(set) var canjesIniciados = 0
     /// SHA-256 de los enlaces del correo recibidos en esta ejecución (solo en memoria; R-19: nunca la URL con el `code`).
-    /// R-15 (regla del PO): un enlace repetido se ignora si su canje está en curso, terminó en éxito o en
+    /// R-15 (regla del PO): un enlace de verificación repetido se ignora si su canje está en curso, terminó en éxito o en
     /// `enlaceInvalido`; si terminó en un error pasajero, se quita y volver a tocarlo lo reintenta.
+    /// R-21 (PO, opción B): un enlace de recuperación repetido se ignora siempre.
     private var enlacesRecibidos: Set<SHA256.Digest> = []
 
     private let contenedor: ContenedorDeDependencias
@@ -217,10 +218,8 @@ final class NavegacionDeCuenta {
         ruta = [.nuevaContrasena]
         canjesIniciados += 1
         let nuevaContrasena = nuevaContrasena
+        // R-21 (PO, opción B): el hash de recuperación nunca se quita; tras `canjeFallido` reintenta solo «Reintentar» (R-3).
         await nuevaContrasena.confirmarEnlace(enlace)
-        if case let .canjeFallido(error) = nuevaContrasena.estado, [.sinConexion, .demasiadosIntentos, .desconocido].contains(error) {
-            olvidar(enlace)
-        }
         irAEnlaceInvalidoSiElCanjeFallo()
     }
 
@@ -265,7 +264,7 @@ final class NavegacionDeCuenta {
         return nuevo
     }
 
-    /// R-15: el canje terminó en un error pasajero; el mismo enlace se podrá canjear otra vez.
+    /// R-15: el canje de verificación terminó en un error pasajero; el mismo enlace se podrá canjear otra vez.
     private func olvidar(_ enlace: String) {
         enlacesRecibidos.remove(SHA256.hash(data: Data(enlace.utf8)))
     }
