@@ -27,14 +27,10 @@ struct RugbyAppApp: App {
                 .onOpenURL { url in
                     // ADR 0008 · C-02: cada enlace va a su flujo por esquema, host exacto y path vacío; lo demás es el
                     // regreso de Google.
-                    if ClienteSupabase.esEnlaceDeVerificacion(url) {
-                        navegacion.anotarEnlace() // H-6: antes de la tarea, para que alArrancar no pida el aviso
-                        Task { await navegacion.recibirEnlace(url.absoluteString) }
-                    } else if ClienteSupabase.esEnlaceDeRecuperacion(url) {
-                        navegacion.anotarEnlace()
-                        Task { await navegacion.recibirEnlaceDeRecuperacion(url.absoluteString) }
-                    } else {
+                    if ClaseDeEnlace(url) == .otro {
                         _ = GIDSignIn.sharedInstance.handle(url)
+                    } else {
+                        navegacion.recibirURL(url, camino: .onOpenURL)
                     }
                 }
         }

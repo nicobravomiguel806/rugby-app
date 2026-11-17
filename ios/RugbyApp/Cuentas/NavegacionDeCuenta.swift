@@ -26,6 +26,8 @@ final class NavegacionDeCuenta {
     private(set) var sesionActivada: Sesion?
     /// H-6 · Si en esta ejecución ya llegó un enlace del correo (solo en memoria).
     private(set) var llegoUnEnlace = false
+    /// C-02 · Ronda 2+3: cuántos canjes de enlaces del correo se iniciaron en esta ejecución (uno por enlace).
+    private(set) var canjesIniciados = 0
 
     private let contenedor: ContenedorDeDependencias
     /// C-02 · §3.6: la recuperación abandonada se cierra antes de cualquier otra acción (hasta 10 s, R-2).
@@ -162,6 +164,22 @@ final class NavegacionDeCuenta {
 
     // MARK: - Enlaces del correo (ADR 0008)
 
+    /// C-02 · Ronda 2+3: punto de entrada único de los enlaces del correo, llegue por `onOpenURL` o por las opciones de
+    /// conexión de la escena (arranque en frío). Devuelve la tarea del canje, o `nil` si la URL no es del correo.
+    @discardableResult
+    func recibirURL(_ url: URL, camino: CaminoDelEnlace) -> Task<Void, Never>? {
+        switch ClaseDeEnlace(url) {
+        case .verificacion:
+            anotarEnlace() // H-6: antes de la tarea, para que alArrancar no pida el aviso
+            return Task { await recibirEnlace(url.absoluteString) }
+        case .recuperacion:
+            anotarEnlace()
+            return Task { await recibirEnlaceDeRecuperacion(url.absoluteString) }
+        case .otro:
+            return nil
+        }
+    }
+
     /// `rugbyapp://auth-callback?code=…`.
     func recibirEnlace(_ enlace: String) async {
         anotarEnlace()
@@ -169,6 +187,7 @@ final class NavegacionDeCuenta {
         empiezaEnAcceso = false
         mostrarCuenta = true
         if ruta.last != .verifica { ruta = [.registro, .verifica] }
+        canjesIniciados += 1
         await registro.confirmarEnlace(enlace)
         irAEnlaceInvalidoSiElCanjeFallo()
     }
@@ -182,6 +201,7 @@ final class NavegacionDeCuenta {
         mostrarCuenta = true
         nuevaContrasena = contenedor.nuevaContrasenaViewModel()
         ruta = [.nuevaContrasena]
+        canjesIniciados += 1
         await nuevaContrasena.confirmarEnlace(enlace)
         irAEnlaceInvalidoSiElCanjeFallo()
     }
