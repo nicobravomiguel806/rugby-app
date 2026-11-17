@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 import os
@@ -29,9 +30,10 @@ final class NavegacionDeCuenta {
     private(set) var llegoUnEnlace = false
     /// C-02 · Ronda 2+3: cuántos canjes de enlaces del correo se iniciaron en esta ejecución (uno por enlace).
     private(set) var canjesIniciados = 0
-    /// Enlaces del correo ya recibidos en esta ejecución (solo en memoria, nunca se registran): si la misma URL llega
-    /// por `connectionOptions` y por `onOpenURL`, el segundo no vuelve a canjear.
-    private var enlacesRecibidos: Set<String> = []
+    /// SHA-256 de los enlaces del correo recibidos en esta ejecución (solo en memoria; R-19: nunca la URL con el `code`).
+    /// R-15 (regla del PO): un enlace repetido se ignora si su canje está en curso, terminó en éxito o en
+    /// `enlaceInvalido`; si terminó en un error pasajero, se quita y volver a tocarlo lo reintenta.
+    private var enlacesRecibidos: Set<SHA256.Digest> = []
 
     private let contenedor: ContenedorDeDependencias
     /// C-02 · §3.6: la recuperación abandonada se cierra antes de cualquier otra acción (hasta 10 s, R-2).
@@ -195,7 +197,11 @@ final class NavegacionDeCuenta {
         mostrarCuenta = true
         if ruta.last != .verifica { ruta = [.registro, .verifica] }
         canjesIniciados += 1
+        let registro = registro
         await registro.confirmarEnlace(enlace)
+        if case let .error(error) = registro.estado, [.sinConexion, .demasiadosIntentos, .desconocido].contains(error) {
+            olvidar(enlace)
+        }
         irAEnlaceInvalidoSiElCanjeFallo()
     }
 
@@ -210,7 +216,11 @@ final class NavegacionDeCuenta {
         nuevaContrasena = contenedor.nuevaContrasenaViewModel()
         ruta = [.nuevaContrasena]
         canjesIniciados += 1
+        let nuevaContrasena = nuevaContrasena
         await nuevaContrasena.confirmarEnlace(enlace)
+        if case let .canjeFallido(error) = nuevaContrasena.estado, [.sinConexion, .demasiadosIntentos, .desconocido].contains(error) {
+            olvidar(enlace)
+        }
         irAEnlaceInvalidoSiElCanjeFallo()
     }
 
@@ -249,10 +259,15 @@ final class NavegacionDeCuenta {
     /// C-02 · Ronda 2+3: el canje de un enlace ocurre una sola vez. Se comprueba antes de cualquier `await`, así que dos
     /// entregas seguidas de la misma URL no pueden pasar las dos.
     private func esNuevo(_ enlace: String, clase: ClaseDeEnlace) -> Bool {
-        let nuevo = enlacesRecibidos.insert(enlace).inserted
+        let nuevo = enlacesRecibidos.insert(SHA256.hash(data: Data(enlace.utf8))).inserted
         let url = URL(string: enlace)
         RegistroDeEnlaces.logger.notice("canje: enlace=\(clase.rawValue, privacy: .public) error=\(url.map(ClaseDeEnlace.traeError) ?? false, privacy: .public) canje=\(nuevo ? "nuevo" : "repetido", privacy: .public)")
         return nuevo
+    }
+
+    /// R-15: el canje terminó en un error pasajero; el mismo enlace se podrá canjear otra vez.
+    private func olvidar(_ enlace: String) {
+        enlacesRecibidos.remove(SHA256.hash(data: Data(enlace.utf8)))
     }
 
     /// `desdeRegistro`: muestra Cuenta activada. `cerrarHoja` (C-02, Iniciar sesión y Nueva contraseña): se cierra la
