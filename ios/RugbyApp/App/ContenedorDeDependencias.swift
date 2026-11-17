@@ -26,7 +26,10 @@ final class ContenedorDeDependencias {
 
     /// Las llaves llegan de Secrets.xcconfig → Info.plist. Si faltan, la app arranca igual y Acceso muestra
     /// «Configuración de Supabase incompleta» al intentar entrar (ADR 0006).
-    init(info: [String: Any] = Bundle.main.infoDictionary ?? [:], bundleID: String = Bundle.main.bundleIdentifier ?? "mx.rugbyapp") {
+    /// C-02 · R-15: `repositorioDeRegistro` y `repositorioDeRecuperacion` solo se pasan en las pruebas de RugbyAppTests
+    /// (canjes que fallan sin red real); la app usa los de Supabase.
+    init(info: [String: Any] = Bundle.main.infoDictionary ?? [:], bundleID: String = Bundle.main.bundleIdentifier ?? "mx.rugbyapp",
+         repositorioDeRegistro: RepositorioDeRegistro? = nil, repositorioDeRecuperacion: RepositorioDeRecuperacion? = nil) {
         func valor(_ clave: String) -> String {
             ((info[clave] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -42,9 +45,9 @@ final class ContenedorDeDependencias {
         )
         // H-1: el decorador borra también el estado que GoogleSignIn deja en el Keychain.
         repositorioDeSesion = RepositorioDeSesionSinRastroDeGoogle(RepositorioDeSesionSupabase(cliente: cliente))
-        repositorioDeRegistro = RepositorioDeRegistroSupabase(cliente: cliente)
+        self.repositorioDeRegistro = repositorioDeRegistro ?? RepositorioDeRegistroSupabase(cliente: cliente)
         repositorioDeConsentimiento = RepositorioDeConsentimientoSupabase(cliente: cliente)
-        repositorioDeRecuperacion = RepositorioDeRecuperacionSupabase(cliente: cliente)
+        self.repositorioDeRecuperacion = repositorioDeRecuperacion ?? RepositorioDeRecuperacionSupabase(cliente: cliente)
         obtenedorDeGoogle = ObtenedorDeCredencialGoogle(
             clientID: valor("GIDClientID"),
             serverClientID: valor("GIDServerClientID"),
