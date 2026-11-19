@@ -3,6 +3,7 @@ package mx.rugbyapp.domain.cuentas
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -36,5 +37,19 @@ class CerrarSesionUseCaseTest {
 
         assertThrows(ErrorDeAutenticacion.Desconocido::class.java) { correr { CerrarSesionUseCase(repositorio).ejecutar() } }
         assertEquals(listOf("borrarSesionLocal"), bitacora.llamadas)
+    }
+
+    // C-02 · CP-167a (ADR 0011): cerrar sesión sin red es solo local. No lanza, no toca el aviso y no guarda nada en el
+    // dispositivo: solo se borra lo local y se intenta revocar en el servidor.
+    @Test fun `CP-167a cerrar sesion sin red cierra lo local sin tocar el aviso ni guardar nada`() {
+        val bitacora = Bitacora()
+        val repositorio = RepositorioFalso(bitacora, sesion).apply { errorAlRevocar = ErrorDeAutenticacion.SinConexion }
+        val consentimientos = RepositorioDeConsentimientoFalso(aceptadas = setOf("v0-borrador"), bitacora = bitacora)
+
+        correr { CerrarSesionUseCase(repositorio).ejecutar() }
+
+        assertEquals(listOf("borrarSesionLocal", "revocarSesionEnServidor"), bitacora.llamadas)
+        assertNull(correr { repositorio.sesionActual() })
+        assertTrue("el aviso no cambia", correr { ConsultarAvisoAceptadoUseCase(consentimientos).ejecutar() })
     }
 }

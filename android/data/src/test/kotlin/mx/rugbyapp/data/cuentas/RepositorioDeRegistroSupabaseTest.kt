@@ -97,6 +97,37 @@ class RepositorioDeRegistroSupabaseTest {
         assertEquals("rugbyapp://auth-callback", pedido.url.parameters["redirect_to"])
     }
 
+    /**
+     * C-02 · H-2 (CA-8, C02-8, AT-11): «Reenviar correo» con el límite de envío de correo da la respuesta neutra, como
+     * un correo inexistente. Solo el límite por IP da «Demasiados intentos». Mismo caso en Swift.
+     */
+    @Test fun `C02-8 reenviar con limite de correo es neutro y por IP da demasiados intentos`() = runTest {
+        val servidor = ServidorFalsoDePrueba()
+        val repo = RepositorioDeRegistroSupabase(cliente(servidor))
+        servidor.responder = { respond("""{"code":429,"error_code":"over_email_send_rate_limit","msg":"rate limit"}""", HttpStatusCode.TooManyRequests, json) }
+        repo.reenviarVerificacion("daniela@ejemplo.mx")
+
+        servidor.responder = { respond("""{"code":429,"error_code":"over_request_rate_limit","msg":"rate limit"}""", HttpStatusCode.TooManyRequests, json) }
+        esperarError(ErrorDeRegistro.DemasiadosIntentos) { repo.reenviarVerificacion("daniela@ejemplo.mx") }
+    }
+
+    /**
+     * C-02 · H-13 (CA-8, C02-8, AT-11): como en `recover`, cualquier respuesta del servidor al reenvío es neutra (un fallo
+     * del envío solo ocurre si la cuenta existe). Solo la falta de red y el límite por IP se distinguen. Mismo caso en Swift.
+     */
+    @Test fun `C02-8 H-13 reenviar con cualquier respuesta del servidor es neutro`() = runTest {
+        val servidor = ServidorFalsoDePrueba()
+        val repo = RepositorioDeRegistroSupabase(cliente(servidor))
+        servidor.responder = { respond("""{"code":500,"error_code":"unexpected_failure","msg":"Error sending confirmation email"}""", HttpStatusCode.InternalServerError, json) }
+        repo.reenviarVerificacion("daniela@ejemplo.mx")
+
+        servidor.responder = { respond("""{"code":400,"error_code":"email_address_not_authorized","msg":"Email address not authorized"}""", HttpStatusCode.BadRequest, json) }
+        repo.reenviarVerificacion("daniela@ejemplo.mx")
+
+        servidor.responder = { throw IOException("sin red") }
+        esperarError(ErrorDeRegistro.SinConexion) { repo.reenviarVerificacion("daniela@ejemplo.mx") }
+    }
+
     @Test fun `CP-160h el enlace se canjea con el code verifier de este dispositivo y guarda la sesion`() = runTest {
         val servidor = ServidorFalsoDePrueba().apply { responder = { respond(RespuestasDePrueba.usuario(), HttpStatusCode.OK, json) } }
         val almacen = AlmacenEnMemoriaDePrueba()
@@ -135,6 +166,17 @@ class RepositorioDeRegistroSupabaseTest {
         }
         esperarError(ErrorDeRegistro.EnlaceInvalido) { repo.confirmarCorreo("com.googleusercontent.apps.123:/oauth?code=x") }
         assertTrue(servidor.pedidos.none { it.first.url.encodedPath.startsWith("/auth/v1/token") })
+    }
+
+    /** H-18 (CP-169 en frío, CI sin configuración): el enlace con error se revisa antes de exigir el cliente. */
+    @Test fun `CP-169 H-18 sin configuracion el enlace vencido da enlace invalido`() = runTest {
+        val servidor = ServidorFalsoDePrueba()
+        val repo = RepositorioDeRegistroSupabase(cliente(servidor, config = ConfiguracionDeSupabase("", "")))
+
+        esperarError(ErrorDeRegistro.EnlaceInvalido) { repo.confirmarCorreo("rugbyapp://auth-callback?error=access_denied&error_code=otp_expired") }
+        esperarError(ErrorDeRegistro.EnlaceInvalido) { repo.confirmarCorreo("com.googleusercontent.apps.123:/oauth?code=x") }
+        esperarError(ErrorDeRegistro.Desconocido) { repo.confirmarCorreo("rugbyapp://auth-callback?code=valido") }
+        assertTrue(servidor.pedidos.isEmpty())
     }
 
     @Test fun `configuracion vacia no usa la red`() = runTest {

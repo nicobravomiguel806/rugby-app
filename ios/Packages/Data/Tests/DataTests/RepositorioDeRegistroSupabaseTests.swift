@@ -87,6 +87,33 @@ final class RepositorioDeRegistroSupabaseTests: XCTestCase {
         XCTAssertEqual(R.query(pedido, "redirect_to"), "rugbyapp://auth-callback")
     }
 
+    /// C-02 · H-2 (CA-8, C02-8, AT-11): «Reenviar correo» con el límite de envío de correo da la respuesta neutra, como
+    /// un correo inexistente. Solo el límite por IP da «Demasiados intentos». Mismo caso en Kotlin.
+    func test_C02_8_reenviarConLimiteDeCorreoEsNeutroYPorIPDaDemasiadosIntentos() async throws {
+        let servidor = ServidorFalsoDePrueba()
+        let repo = RepositorioDeRegistroSupabase(cliente: cliente(servidor))
+        servidor.responder = { _ in (429, Data(#"{"code":429,"error_code":"over_email_send_rate_limit","msg":"rate limit"}"#.utf8)) }
+        try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx")
+
+        servidor.responder = { _ in (429, Data(#"{"code":429,"error_code":"over_request_rate_limit","msg":"rate limit"}"#.utf8)) }
+        await esperarError(.demasiadosIntentos) { try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx") }
+    }
+
+    /// C-02 · H-13 (CA-8, C02-8, AT-11): como en `recover`, cualquier respuesta del servidor al reenvío es neutra (un fallo
+    /// del envío solo ocurre si la cuenta existe). Solo la falta de red y el límite por IP se distinguen. Mismo caso en Kotlin.
+    func test_C02_8_H13_reenviarConCualquierRespuestaDelServidorEsNeutro() async throws {
+        let servidor = ServidorFalsoDePrueba()
+        let repo = RepositorioDeRegistroSupabase(cliente: cliente(servidor))
+        servidor.responder = { _ in (500, Data(#"{"code":500,"error_code":"unexpected_failure","msg":"Error sending confirmation email"}"#.utf8)) }
+        try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx")
+
+        servidor.responder = { _ in (400, Data(#"{"code":400,"error_code":"email_address_not_authorized","msg":"Email address not authorized"}"#.utf8)) }
+        try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx")
+
+        servidor.responder = { _ in throw URLError(.notConnectedToInternet) }
+        await esperarError(.sinConexion) { try await repo.reenviarVerificacion(correo: "daniela@ejemplo.mx") }
+    }
+
     func test_CP160h_elEnlaceSeCanjeaConElCodeVerifierDeEsteDispositivoYGuardaLaSesion() async throws {
         let servidor = ServidorFalsoDePrueba()
         servidor.responder = { _ in (200, Data(R.usuario().utf8)) }
@@ -125,6 +152,17 @@ final class RepositorioDeRegistroSupabaseTests: XCTestCase {
             _ = try await repo.confirmarCorreo(enlace: "rugbyapp://auth-callback?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired")
         }
         await esperarError(.enlaceInvalido) { _ = try await repo.confirmarCorreo(enlace: "com.googleusercontent.apps.123:/oauth?code=x") }
+        XCTAssertTrue(servidor.pedidos.isEmpty)
+    }
+
+    /// H-18 (CP-169 en frío, CI sin configuración): el enlace con error se revisa antes de exigir el cliente.
+    func test_CP169_H18_sinConfiguracionElEnlaceVencidoDaEnlaceInvalido() async {
+        let servidor = ServidorFalsoDePrueba()
+        let repo = RepositorioDeRegistroSupabase(cliente: cliente(servidor, configuracion: ConfiguracionDeSupabase(url: "", anonKey: "")))
+
+        await esperarError(.enlaceInvalido) { _ = try await repo.confirmarCorreo(enlace: "rugbyapp://auth-callback?error=access_denied&error_code=otp_expired") }
+        await esperarError(.enlaceInvalido) { _ = try await repo.confirmarCorreo(enlace: "com.googleusercontent.apps.123:/oauth?code=x") }
+        await esperarError(.desconocido) { _ = try await repo.confirmarCorreo(enlace: "rugbyapp://auth-callback?code=valido") }
         XCTAssertTrue(servidor.pedidos.isEmpty)
     }
 

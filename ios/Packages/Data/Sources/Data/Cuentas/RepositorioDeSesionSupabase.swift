@@ -1,9 +1,13 @@
 // SP-04 · Sesión de Supabase a partir del ID token nativo (ADR 0006). Espejo en Android: data/.../cuentas/RepositorioDeSesionSupabase.kt.
 //
 // - iniciarSesion: signInWithIdToken con el nonce CRUDO (CP-159). Nunca recibe ni envía el hash.
+// - C-02 · iniciarSesion(correo:contrasena:): POST /auth/v1/token?grant_type=password. `invalid_credentials` (correo o
+//   contraseña incorrectos, AT-11) → credencialRechazada; `email_not_confirmed` → correoSinVerificar; 429 →
+//   demasiadosIntentos; sin red → sinConexion.
 // - borrarSesionLocal: guarda en memoria el access token y borra el Keychain (sin red, P-8).
-// - revocarSesionEnServidor: POST /auth/v1/logout?scope=local con ese token (solo este dispositivo) y lo olvida.
-// Nada de esto escribe tokens en logs (AT-10).
+// - revocarSesionEnServidor: POST /auth/v1/logout?scope=local con ese token (solo este dispositivo) y lo olvida. Sin red
+//   falla y el cierre local se mantiene: no se guarda nada para reintentar (C-02, ADR 0011).
+// Nada de esto escribe tokens ni contraseñas en logs (AT-10).
 import Foundation
 import Auth
 import Domain
@@ -43,6 +47,16 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
                 accessToken: credencial.accessToken,
                 nonce: nonce
             ))
+            return Self.sesion(de: sesion.user)
+        } catch {
+            throw Self.traducir(error)
+        }
+    }
+
+    public func iniciarSesion(correo: String, contrasena: String) async throws -> Sesion {
+        guard let auth else { throw ErrorDeAutenticacion.configuracionIncompleta }
+        do {
+            let sesion = try await auth.signIn(email: correo, password: contrasena)
             return Self.sesion(de: sesion.user)
         } catch {
             throw Self.traducir(error)
@@ -97,20 +111,24 @@ public final class RepositorioDeSesionSupabase: RepositorioDeSesion, @unchecked 
         return Sesion(usuarioId: usuario.id.uuidString.lowercased(), correo: usuario.email, nombre: nombre)
     }
 
+    static func esSinConexion(_ error: URLError) -> Bool {
+        switch error.code {
+        case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost,
+             .cannotConnectToHost, .dataNotAllowed, .internationalRoamingOff, .dnsLookupFailed:
+            return true
+        default:
+            return false
+        }
+    }
+
     static func traducir(_ error: Error) -> ErrorDeAutenticacion {
         if let error = error as? ErrorDeAutenticacion { return error }
-        if let error = error as? URLError {
-            switch error.code {
-            case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost,
-                 .cannotConnectToHost, .dataNotAllowed, .internationalRoamingOff, .dnsLookupFailed:
-                return .sinConexion
-            default:
-                return .desconocido
-            }
-        }
+        if let error = error as? URLError { return esSinConexion(error) ? .sinConexion : .desconocido }
         if let error = error as? AuthError {
             switch error {
-            case let .api(_, _, _, respuesta):
+            case let .api(_, codigo, _, respuesta):
+                if respuesta.statusCode == 429 || codigo == .overRequestRateLimit { return .demasiadosIntentos }
+                if codigo == .emailNotConfirmed { return .correoSinVerificar }
                 return (400..<500).contains(respuesta.statusCode) ? .credencialRechazada : .desconocido
             case .jwtVerificationFailed, .malformedJWT, .missingExpClaim, .sessionMissing:
                 return .credencialRechazada

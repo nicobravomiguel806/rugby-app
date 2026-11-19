@@ -27,7 +27,12 @@ class AlmacenEnMemoriaDePrueba : AlmacenSeguroDeSesion {
     override suspend fun saveCodeVerifier(codeVerifier: String) { this.codeVerifier = codeVerifier }
     override suspend fun loadCodeVerifier() = codeVerifier
     override suspend fun deleteCodeVerifier() { codeVerifier = null }
-    override suspend fun borrarTodo() { sesion = null; codeVerifier = null }
+    // C-02 · Entradas genéricas (marca «recuperación en curso»).
+    val entradas = mutableMapOf<String, String>()
+    override suspend fun guardar(clave: String, valor: String) { entradas[clave] = valor }
+    override suspend fun leer(clave: String): String? = entradas[clave]
+    override suspend fun borrar(clave: String) { entradas.remove(clave) }
+    override suspend fun borrarTodo() { sesion = null; codeVerifier = null; entradas.clear() }
 }
 
 /** Servidor falso: registra cada pedido (con su cuerpo) y responde con lo que diga `responder`. */

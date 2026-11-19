@@ -49,6 +49,9 @@ class RepositorioDeSesionSupabaseTest {
         override suspend fun saveCodeVerifier(codeVerifier: String) { this.codeVerifier = codeVerifier }
         override suspend fun loadCodeVerifier() = codeVerifier
         override suspend fun deleteCodeVerifier() { codeVerifier = null }
+        override suspend fun guardar(clave: String, valor: String) = Unit
+        override suspend fun leer(clave: String): String? = null
+        override suspend fun borrar(clave: String) = Unit
         override suspend fun borrarTodo() { sesion = null; codeVerifier = null }
     }
 
@@ -183,5 +186,45 @@ class RepositorioDeSesionSupabaseTest {
         assertTrue("sin token no se llama a la red", servidor.pedidos.isEmpty())
         repo.revocarSesionEnServidor()
         assertTrue(servidor.pedidos.isEmpty())
+    }
+
+    // C-02 · CP-165: inicio con correo y contraseña
+
+    @Test fun `CP-165 inicio con correo manda grant type password con el correo y la contrasena`() = runTest {
+        val servidor = ServidorFalso().apply { responder = { respond(sesionJson, HttpStatusCode.OK, json) } }
+        val almacen = AlmacenEnMemoria()
+        val repo = repositorio(servidor, almacen)
+
+        val sesion = repo.iniciarSesion("jugador@rugby.mx", " Clave Larga 1 ")
+
+        val (pedido, cuerpo) = servidor.pedidos.first()
+        assertEquals("POST", pedido.method.value)
+        assertEquals("/auth/v1/token", pedido.url.encodedPath)
+        assertEquals("password", pedido.url.parameters["grant_type"])
+        val campos = Json.parseToJsonElement(cuerpo).jsonObject
+        assertEquals("jugador@rugby.mx", campos["email"]?.jsonPrimitive?.content)
+        assertEquals(" Clave Larga 1 ", campos["password"]?.jsonPrimitive?.content)
+        assertEquals(Sesion("8f2c0a4e-1b2d-4c3e-9f00-123456789abc", "jugador@rugby.mx"), sesion)
+        assertNotNull("la sesión se guarda en el almacén seguro", almacen.sesion)
+    }
+
+    @Test fun `CP-165 traduce las respuestas del servidor`() = runTest {
+        val casos = listOf(
+            Triple(HttpStatusCode.BadRequest, """{"error_code":"invalid_credentials","msg":"Invalid login credentials"}""", ErrorDeAutenticacion.CredencialRechazada),
+            Triple(HttpStatusCode.BadRequest, """{"error_code":"email_not_confirmed","msg":"Email not confirmed"}""", ErrorDeAutenticacion.CorreoSinVerificar),
+            Triple(HttpStatusCode.TooManyRequests, """{"error_code":"over_request_rate_limit","msg":"Too many"}""", ErrorDeAutenticacion.DemasiadosIntentos),
+        )
+        for ((estado, cuerpo, esperado) in casos) {
+            val servidor = ServidorFalso().apply { responder = { respond(cuerpo, estado, json) } }
+            val repo = repositorio(servidor)
+            esperarError(esperado) { repo.iniciarSesion("jugador@rugby.mx", "x") }
+        }
+    }
+
+    @Test fun `CP-165 inicio con correo sin red da sin conexion`() = runTest {
+        val servidor = ServidorFalso().apply { responder = { throw IOException("sin red") } }
+        val repo = repositorio(servidor)
+
+        esperarError(ErrorDeAutenticacion.SinConexion) { repo.iniciarSesion("jugador@rugby.mx", "x") }
     }
 }

@@ -8,6 +8,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 import mx.rugbyapp.app.BuildConfig
+import mx.rugbyapp.app.cuentas.ObtenedorDeCredencialGoogle
+import mx.rugbyapp.app.cuentas.RepositorioDeSesionSinRastroDeGoogle
 import mx.rugbyapp.data.cuentas.AlmacenDeSesionCifrado
 import mx.rugbyapp.data.cuentas.AlmacenSeguroDeSesion
 import mx.rugbyapp.data.cuentas.ClienteSupabase
@@ -15,12 +17,14 @@ import mx.rugbyapp.data.cuentas.ConfiguracionDeSupabase
 import mx.rugbyapp.data.cuentas.GeneradorDeNonceSeguro
 import mx.rugbyapp.data.cuentas.HashDeNonceSHA256
 import mx.rugbyapp.data.cuentas.RepositorioDeConsentimientoSupabase
+import mx.rugbyapp.data.cuentas.RepositorioDeRecuperacionSupabase
 import mx.rugbyapp.data.cuentas.RepositorioDeRegistroSupabase
 import mx.rugbyapp.data.cuentas.RepositorioDeSesionSupabase
 import mx.rugbyapp.data.rules.RepositorioDeReglasPorDefecto
 import mx.rugbyapp.domain.cuentas.GeneradorDeNonce
 import mx.rugbyapp.domain.cuentas.HashDeNonce
 import mx.rugbyapp.domain.cuentas.RepositorioDeConsentimiento
+import mx.rugbyapp.domain.cuentas.RepositorioDeRecuperacion
 import mx.rugbyapp.domain.cuentas.RepositorioDeRegistro
 import mx.rugbyapp.domain.cuentas.RepositorioDeSesion
 import mx.rugbyapp.domain.rules.RepositorioDeReglas
@@ -44,8 +48,13 @@ object ModuloDeDatos {
         almacen,
     )
 
+    // C-02 · CA-3: el decorador limpia también el estado de Credential Manager al cerrar sesión (SP-04 H-3).
     @Provides @Singleton
-    fun repositorioDeSesion(cliente: ClienteSupabase): RepositorioDeSesion = RepositorioDeSesionSupabase(cliente)
+    fun repositorioDeSesion(cliente: ClienteSupabase, google: ObtenedorDeCredencialGoogle): RepositorioDeSesion =
+        RepositorioDeSesionSinRastroDeGoogle(RepositorioDeSesionSupabase(cliente), google)
+
+    @Provides @Singleton
+    fun repositorioDeRecuperacion(cliente: ClienteSupabase): RepositorioDeRecuperacion = RepositorioDeRecuperacionSupabase(cliente)
 
     @Provides @Singleton
     fun repositorioDeRegistro(cliente: ClienteSupabase): RepositorioDeRegistro = RepositorioDeRegistroSupabase(cliente)

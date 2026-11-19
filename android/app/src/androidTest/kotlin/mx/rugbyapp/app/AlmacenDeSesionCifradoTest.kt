@@ -2,16 +2,22 @@ package mx.rugbyapp.app
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.auth.user.UserSession
 import java.io.File
+import java.io.IOException
 import java.security.KeyStore
 import java.security.ProviderException
 import java.util.UUID
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
+import mx.rugbyapp.app.di.ModuloDeCasosDeUso
 import mx.rugbyapp.data.cuentas.AlmacenDeSesionCifrado
 import mx.rugbyapp.data.cuentas.ConfiguracionDeSupabase
 import mx.rugbyapp.data.cuentas.RepositorioDeSesionSupabase
@@ -26,7 +32,7 @@ import org.junit.runner.RunWith
 /**
  * SP-04 · Almacén real (Tink AES-GCM + Android Keystore + DataStore, ADR 0007) en el dispositivo.
  * CP-154 (otra instancia lee la misma sesión), CP-155 (cerrar sesión no deja token), CA-1 (nada en claro en
- * shared_prefs ni en el archivo de DataStore) y CA-2 (sin respaldo). Espejo en iOS: RugbyAppTests/AlmacenDeSesionKeychainTests.swift.
+ * shared_prefs ni en el archivo de DataStore) y CA-2 (sin respaldo). C-02 · CP-170 (H-20) y CP-167h (sin revocaciones, ADR 0011). Espejo en iOS: RugbyAppTests/AlmacenDeSesionKeychainTests.swift.
  * Sin espacios en los nombres: el dex de minSdk 29 no los admite en pruebas instrumentadas.
  */
 @RunWith(AndroidJUnit4::class)
@@ -92,10 +98,10 @@ class AlmacenDeSesionCifradoTest {
         almacen().saveSession(sesion)
         almacen().saveCodeVerifier("verificador")
         var intentos = 0
-        val conKeystoreRoto = AlmacenDeSesionCifrado(contexto, nombre, alias) {
+        val conKeystoreRoto = AlmacenDeSesionCifrado(contexto, nombre, alias, fabricaDeAead = {
             intentos++
             throw ProviderException("Keystore no disponible (simulado)")
-        }
+        })
 
         assertNull(conKeystoreRoto.loadSession())
         assertNull(conKeystoreRoto.loadCodeVerifier())
@@ -130,6 +136,50 @@ class AlmacenDeSesionCifradoTest {
             archivo.delete()
             contexto.getSharedPreferences("${nombreNuevo}_keyset", Context.MODE_PRIVATE).edit().clear().commit()
         }
+    }
+
+    /**
+     * C-02 · CP-170 / CA-5 (SP-04 H-20): un IOException real al leer el archivo devuelve `null`, sin borrar nada y sin
+     * cerrar la app. La sesión guardada sigue ahí para la siguiente lectura.
+     */
+    @Test fun cp170_unIOExceptionAlLeerDevuelveNullSinBorrarNiCerrarLaApp() = runBlocking {
+        almacen().saveSession(sesion)
+        var escrituras = 0
+        val disco = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flow { throw IOException("disco no disponible (simulado)") }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                escrituras++
+                throw IOException("disco no disponible (simulado)")
+            }
+        }
+        val conDiscoRoto = AlmacenDeSesionCifrado(contexto, nombre, alias, datosDePrueba = disco)
+
+        assertNull(conDiscoRoto.loadSession())
+        assertNull(conDiscoRoto.loadCodeVerifier())
+        assertNull(RepositorioDeSesionSupabase(ConfiguracionDeSupabase("https://x.supabase.co", "k"), conDiscoRoto).sesionActual())
+        assertEquals("no llama a borrarTodo()", 0, escrituras)
+        assertEquals("la sesión sigue guardada", sesion.accessToken, almacen().loadSession()?.accessToken)
+    }
+
+    /**
+     * C-02 · CP-167h (ADR 0011, AT-10, AT-17): cerrar sesión sin red, con el caso de uso que compone la app, es solo
+     * local: no queda la sesión, no se crea el DataStore `revocaciones` (ni su keyset ni su llave del Keystore) y no hay
+     * tokens en claro. Espejo en iOS: RugbyAppTests/CierreDeSesionSinRastroTests.swift › test_CP167h_….
+     */
+    @Test fun cp167h_cerrarSesionSinRedNoDejaElDataStoreDeRevocacionesNiTokens() = runBlocking {
+        almacen().saveSession(sesion)
+        // Sin red: el puerto 1 de localhost rechaza la conexión, así que el logout en el servidor falla.
+        val repositorio = RepositorioDeSesionSupabase(ConfiguracionDeSupabase("https://127.0.0.1:1", "anon-de-prueba"), almacen())
+        assertEquals("precondición", sesion.user?.id, repositorio.sesionActual()?.usuarioId)
+
+        ModuloDeCasosDeUso.cerrarSesion(repositorio).ejecutar()
+
+        assertNull(repositorio.sesionActual())
+        assertNull(almacen().loadSession())
+        assertFalse(File(contexto.filesDir, "datastore/revocaciones.preferences_pb").exists())
+        assertFalse(File(contexto.applicationInfo.dataDir, "shared_prefs/revocaciones_keyset.xml").exists())
+        assertFalse(KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.containsAlias("rugbyapp_revocaciones"))
+        assertSinTokensEnClaro()
     }
 
     @Test fun ca2_laAppNoPermiteRespaldoDelSistema() {

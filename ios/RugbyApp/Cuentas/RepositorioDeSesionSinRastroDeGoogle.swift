@@ -17,6 +17,10 @@ final class RepositorioDeSesionSinRastroDeGoogle: RepositorioDeSesion {
         try await interno.iniciarSesion(con: credencial, nonce: nonce)
     }
 
+    func iniciarSesion(correo: String, contrasena: String) async throws -> Sesion {
+        try await interno.iniciarSesion(correo: correo, contrasena: contrasena)
+    }
+
     func sesionActual() async -> Sesion? {
         await interno.sesionActual()
     }

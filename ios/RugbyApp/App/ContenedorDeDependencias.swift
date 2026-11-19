@@ -7,12 +7,17 @@ import Presentation
 /// Inyección manual por constructor: Data → caso de uso → ViewModel. Espejo en Android: app/di/.
 /// SP-04: `@MainActor` porque guarda el AccesoViewModel (una sola sesión para toda la app).
 /// C-01: también el AvisoDePrivacidadViewModel y la URL del aviso.
+/// C-02: inicio con correo y recuperación de contraseña (sin revocaciones pendientes, ADR 0011).
 @MainActor
 final class ContenedorDeDependencias {
+    /// C-02 · Tope del arranque (R-2): sin red, cerrar la recuperación abandonada no bloquea más de 10 s.
+    static let topeDelArranque: Duration = .seconds(10)
+
     private let repositorioDeReglas: RepositorioDeReglas = RepositorioDeReglasPorDefecto()
     private let repositorioDeSesion: RepositorioDeSesion
     private let repositorioDeRegistro: RepositorioDeRegistro
     private let repositorioDeConsentimiento: RepositorioDeConsentimiento
+    private let repositorioDeRecuperacion: RepositorioDeRecuperacion
     private let obtenedorDeGoogle: ObtenedorDeCredencial
     let accesoViewModel: AccesoViewModel
     let avisoViewModel: AvisoDePrivacidadViewModel
@@ -21,7 +26,10 @@ final class ContenedorDeDependencias {
 
     /// Las llaves llegan de Secrets.xcconfig → Info.plist. Si faltan, la app arranca igual y Acceso muestra
     /// «Configuración de Supabase incompleta» al intentar entrar (ADR 0006).
-    init(info: [String: Any] = Bundle.main.infoDictionary ?? [:], bundleID: String = Bundle.main.bundleIdentifier ?? "mx.rugbyapp") {
+    /// C-02 · R-15: `repositorioDeRegistro` y `repositorioDeRecuperacion` solo se pasan en las pruebas de RugbyAppTests
+    /// (canjes que fallan sin red real); la app usa los de Supabase.
+    init(info: [String: Any] = Bundle.main.infoDictionary ?? [:], bundleID: String = Bundle.main.bundleIdentifier ?? "mx.rugbyapp",
+         repositorioDeRegistro: RepositorioDeRegistro? = nil, repositorioDeRecuperacion: RepositorioDeRecuperacion? = nil) {
         func valor(_ clave: String) -> String {
             ((info[clave] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -37,28 +45,33 @@ final class ContenedorDeDependencias {
         )
         // H-1: el decorador borra también el estado que GoogleSignIn deja en el Keychain.
         repositorioDeSesion = RepositorioDeSesionSinRastroDeGoogle(RepositorioDeSesionSupabase(cliente: cliente))
-        repositorioDeRegistro = RepositorioDeRegistroSupabase(cliente: cliente)
+        self.repositorioDeRegistro = repositorioDeRegistro ?? RepositorioDeRegistroSupabase(cliente: cliente)
         repositorioDeConsentimiento = RepositorioDeConsentimientoSupabase(cliente: cliente)
+        self.repositorioDeRecuperacion = repositorioDeRecuperacion ?? RepositorioDeRecuperacionSupabase(cliente: cliente)
         obtenedorDeGoogle = ObtenedorDeCredencialGoogle(
             clientID: valor("GIDClientID"),
             serverClientID: valor("GIDServerClientID"),
             esquemaDeURL: esquemaDeGoogle
         )
         urlDelAviso = URL(string: valor("AvisoDePrivacidadURL")).flatMap { $0.scheme == "https" ? $0 : nil }
+        let cerrarSesion = CerrarSesionUseCase(repositorio: repositorioDeSesion)
         accesoViewModel = AccesoViewModel(
             iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: repositorioDeSesion),
-            cerrarSesion: CerrarSesionUseCase(repositorio: repositorioDeSesion)
+            cerrarSesion: cerrarSesion
         )
         avisoViewModel = AvisoDePrivacidadViewModel(
             aceptar: AceptarAvisoDePrivacidadUseCase(repositorio: repositorioDeConsentimiento),
-            rechazar: RechazarAvisoDePrivacidadUseCase(repositorio: repositorioDeConsentimiento, cerrarSesion: CerrarSesionUseCase(repositorio: repositorioDeSesion)),
+            rechazar: RechazarAvisoDePrivacidadUseCase(repositorio: repositorioDeConsentimiento, cerrarSesion: cerrarSesion),
             consultar: ConsultarAvisoAceptadoUseCase(repositorio: repositorioDeConsentimiento),
             obtenerSesionActual: ObtenerSesionActualUseCase(repositorio: repositorioDeSesion)
         )
     }
 
-    private static func iniciarSesion(_ obtenedor: ObtenedorDeCredencial, _ repositorio: RepositorioDeSesion) -> IniciarSesionUseCase {
+    private static func iniciarSesion(
+        _ obtenedor: ObtenedorDeCredencial,
+        _ repositorio: RepositorioDeSesion
+    ) -> IniciarSesionUseCase {
         IniciarSesionUseCase(
             generadorDeNonce: GeneradorDeNonceSeguro(),
             hashDeNonce: HashDeNonceSHA256(),
@@ -87,6 +100,18 @@ final class ContenedorDeDependencias {
         )
     }
 
+    // MARK: - C-02 · Recuperación
+
+    private var cerrarSesion: CerrarSesionUseCase {
+        CerrarSesionUseCase(repositorio: repositorioDeSesion)
+    }
+
+    var cerrarRecuperacionAbandonada: CerrarRecuperacionAbandonadaUseCase {
+        CerrarRecuperacionAbandonadaUseCase(repositorio: repositorioDeRecuperacion, cerrarSesion: cerrarSesion)
+    }
+
+    // MARK: - ViewModels nuevos cada vez (lo escrito vive solo en memoria y se olvida al cerrar sesión)
+
     /// C-01 · Uno nuevo cada vez que se empieza un registro: lo marcado vive solo en memoria (AT-17) y se olvida al
     /// rechazar el aviso.
     func registroViewModel() -> RegistroViewModel {
@@ -97,5 +122,29 @@ final class ContenedorDeDependencias {
             aceptarAviso: AceptarAvisoDePrivacidadUseCase(repositorio: repositorioDeConsentimiento),
             iniciarSesion: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion)
         )
+    }
+
+    func iniciarSesionViewModel() -> IniciarSesionViewModel {
+        IniciarSesionViewModel(
+            iniciarConCorreo: IniciarSesionConCorreoUseCase(repositorio: repositorioDeSesion),
+            iniciarConGoogle: Self.iniciarSesion(obtenedorDeGoogle, repositorioDeSesion),
+            reenviar: ReenviarVerificacionUseCase(repositorio: repositorioDeRegistro)
+        )
+    }
+
+    func recuperarContrasenaViewModel(correo: String) -> RecuperarContrasenaViewModel {
+        RecuperarContrasenaViewModel(pedir: PedirRecuperacionDeContrasenaUseCase(repositorio: repositorioDeRecuperacion), correo: correo)
+    }
+
+    func nuevaContrasenaViewModel() -> NuevaContrasenaViewModel {
+        NuevaContrasenaViewModel(
+            confirmar: ConfirmarRecuperacionDeContrasenaUseCase(repositorio: repositorioDeRecuperacion),
+            restablecer: RestablecerContrasenaUseCase(repositorio: repositorioDeRecuperacion),
+            abandonar: cerrarRecuperacionAbandonada
+        )
+    }
+
+    func enlaceInvalidoViewModel(tipo: TipoDeEnlace, correoConocido: String?) -> EnlaceInvalidoViewModel {
+        EnlaceInvalidoViewModel(tipo: tipo, correoConocido: correoConocido, reenviar: ReenviarVerificacionUseCase(repositorio: repositorioDeRegistro))
     }
 }

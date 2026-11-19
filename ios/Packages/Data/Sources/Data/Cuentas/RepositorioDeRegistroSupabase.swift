@@ -38,13 +38,25 @@ public final class RepositorioDeRegistroSupabase: RepositorioDeRegistro, @unchec
         do {
             try await auth.resend(email: correo, type: .signup, emailRedirectTo: ClienteSupabase.urlDeRegreso)
         } catch {
+            // C-02 · H-2 y H-13 (CA-8, C02-8, AT-11): igual que `recover`. El servidor solo intenta enviar si la cuenta
+            // existe, así que cualquier respuesta suya (límite de correo, 5xx, `email_address_not_authorized`…) es
+            // neutra. Solo se distinguen la falta de red y el límite por IP (`over_request_rate_limit`).
+            if RepositorioDeRecuperacionSupabase.esLimitePorIP(error) { throw ErrorDeRegistro.demasiadosIntentos }
+            if case .sinConexion = Self.traducir(error) { throw ErrorDeRegistro.sinConexion }
+            if error is AuthError { return }
             throw Self.traducir(error)
         }
     }
 
     public func confirmarCorreo(enlace: String) async throws -> Sesion {
-        guard let auth else { throw ErrorDeRegistro.desconocido }
+        // H-18: el enlace y su error se revisan antes de exigir el cliente (sin configuración, un enlace vencido sigue
+        // siendo inválido). Supabase pone el error en el enlace si venció o ya se usó (p. ej. error_code=otp_expired).
         guard let url = URL(string: enlace), Self.esEnlaceDeVerificacion(url) else { throw ErrorDeRegistro.enlaceInvalido }
+        let parametros = RepositorioDeRecuperacionSupabase.parametros(de: url)
+        if ["error", "error_code", "error_description"].contains(where: { parametros[$0] != nil }) || (parametros["code"] ?? "").isEmpty {
+            throw ErrorDeRegistro.enlaceInvalido
+        }
+        guard let auth else { throw ErrorDeRegistro.desconocido }
         do {
             let sesion = try await auth.session(from: url)
             return RepositorioDeSesionSupabase.sesion(de: sesion.user)
@@ -58,9 +70,9 @@ public final class RepositorioDeRegistroSupabase: RepositorioDeRegistro, @unchec
         }
     }
 
-    /// Solo `rugbyapp://auth-callback…` (ADR 0008). Lo demás (p. ej. el regreso de Google) no se toca.
+    /// Solo `rugbyapp://auth-callback` con path vacío (ADR 0008, C-02). Lo demás (p. ej. el regreso de Google) no se toca.
     public static func esEnlaceDeVerificacion(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == ClienteSupabase.urlDeRegreso.scheme && url.host?.lowercased() == ClienteSupabase.urlDeRegreso.host
+        ClienteSupabase.esEnlaceDeVerificacion(url)
     }
 
     static func traducir(_ error: Error) -> ErrorDeRegistro {

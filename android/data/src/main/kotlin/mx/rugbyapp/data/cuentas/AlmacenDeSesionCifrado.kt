@@ -19,6 +19,7 @@ import com.google.crypto.tink.RegistryConfiguration
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.integration.android.AndroidKeysetManager
 import io.github.jan.supabase.auth.user.UserSession
+import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
 import java.util.Base64
@@ -48,10 +49,12 @@ class AlmacenDeSesionCifrado(
     private val aliasDeLlave: String = "rugbyapp_sesion",
     /** Solo para pruebas (H-14b): sustituye la creación real de la primitiva con Tink + Keystore. */
     private val fabricaDeAead: (() -> Aead)? = null,
+    /** Solo para pruebas (C-02 · CA-5 / H-20, CP-170): sustituye el DataStore del archivo `<nombre>.preferences_pb`. */
+    datosDePrueba: DataStore<Preferences>? = null,
 ) : AlmacenSeguroDeSesion {
 
     private val app = contexto.applicationContext
-    private val datos: DataStore<Preferences> = dataStoreDe(app, nombre)
+    private val datos: DataStore<Preferences> = datosDePrueba ?: dataStoreDe(app, nombre)
     private val archivoDelKeyset = "${nombre}_keyset"
     @Volatile private var aead: Aead? = null
 
@@ -74,17 +77,26 @@ class AlmacenDeSesionCifrado(
         withContext(Dispatchers.IO) { datos.edit { it.clear() } }
     }
 
-    private suspend fun guardar(clave: String, valor: String) {
+    /**
+     * C-02 · Entradas genéricas por clave (marca «recuperación en curso»). Se cifran igual que la sesión y el associated
+     * data es la propia clave, así que una entrada no se puede mover a otra.
+     */
+    override suspend fun guardar(clave: String, valor: String) {
         withContext(Dispatchers.IO) {
             val cifrado = aead().encrypt(valor.toByteArray(Charsets.UTF_8), clave.toByteArray(Charsets.UTF_8))
             datos.edit { it[stringPreferencesKey(clave)] = Base64.getEncoder().encodeToString(cifrado) }
         }
     }
 
-    private suspend fun leer(clave: String): String? = withContext(Dispatchers.IO) {
-        val texto = datos.data.first()[stringPreferencesKey(clave)] ?: return@withContext null
+    override suspend fun leer(clave: String): String? = withContext(Dispatchers.IO) {
         try {
+            // C-02 · CA-5 / SP-04 H-20: la lectura del archivo también va dentro del try.
+            val texto = datos.data.first()[stringPreferencesKey(clave)] ?: return@withContext null
             String(aead().decrypt(Base64.getDecoder().decode(texto), clave.toByteArray(Charsets.UTF_8)), Charsets.UTF_8)
+        } catch (_: IOException) {
+            // Un IOException real al leer el archivo (disco, permisos) no es una sesión inválida: sin sesión por ahora,
+            // sin borrar nada y sin cerrar la app. En el siguiente intento se vuelve a leer.
+            null
         } catch (_: GeneralSecurityException) {
             borrarTodo() // no se puede descifrar: sin sesión (ADR 0007)
             null
@@ -99,7 +111,7 @@ class AlmacenDeSesionCifrado(
         }
     }
 
-    private suspend fun borrar(clave: String) {
+    override suspend fun borrar(clave: String) {
         withContext(Dispatchers.IO) { datos.edit { it.remove(stringPreferencesKey(clave)) } }
     }
 

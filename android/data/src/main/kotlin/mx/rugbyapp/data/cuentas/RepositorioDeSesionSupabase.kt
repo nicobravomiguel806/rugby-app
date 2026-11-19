@@ -2,7 +2,10 @@ package mx.rugbyapp.data.cuentas
 
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.exception.AuthErrorCode
+import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.providers.Google
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.exceptions.HttpRequestException
@@ -27,9 +30,13 @@ import mx.rugbyapp.domain.cuentas.Sesion
  * SP-04 · Sesión de Supabase a partir del ID token nativo (ADR 0006). Espejo en iOS: Data/Cuentas/RepositorioDeSesionSupabase.swift.
  *
  * - iniciarSesion: signInWith(IDToken) con el nonce CRUDO (CP-159). Nunca recibe ni envía el hash.
+ * - C-02 · iniciarSesion(correo, contrasena): POST /auth/v1/token?grant_type=password. `invalid_credentials` (correo
+ *   o contraseña incorrectos, AT-11) → CredencialRechazada; `email_not_confirmed` → CorreoSinVerificar; 429 →
+ *   DemasiadosIntentos; sin red → SinConexion.
  * - borrarSesionLocal: guarda en memoria el access token y borra el almacén cifrado y la sesión del cliente (sin red, P-8).
- * - revocarSesionEnServidor: POST /auth/v1/logout?scope=local con ese token (solo este dispositivo) y lo olvida.
- * Nada de esto escribe tokens en logs (AT-10).
+ * - revocarSesionEnServidor: POST /auth/v1/logout?scope=local con ese token (solo este dispositivo) y lo olvida. Sin red
+ *   falla y el cierre local se mantiene: no se guarda nada para reintentar (C-02, ADR 0011).
+ * Nada de esto escribe tokens ni contraseñas en logs (AT-10).
  */
 class RepositorioDeSesionSupabase(private val cliente: ClienteSupabase) : RepositorioDeSesion {
 
@@ -58,6 +65,21 @@ class RepositorioDeSesionSupabase(private val cliente: ClienteSupabase) : Reposi
                 provider = Google
                 accessToken = c.accessToken
                 this.nonce = nonce
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw traducir(e)
+        }
+        return auth.currentUserOrNull()?.let(::sesionDe) ?: throw ErrorDeAutenticacion.Desconocido
+    }
+
+    override suspend fun iniciarSesion(correo: String, contrasena: String): Sesion {
+        val auth = supabase?.auth ?: throw ErrorDeAutenticacion.ConfiguracionIncompleta
+        try {
+            auth.signInWith(Email) {
+                email = correo
+                password = contrasena
             }
         } catch (e: CancellationException) {
             throw e
@@ -116,10 +138,13 @@ class RepositorioDeSesionSupabase(private val cliente: ClienteSupabase) : Reposi
             return Sesion(usuarioId = usuario.id, correo = usuario.email, nombre = nombre)
         }
 
-        fun traducir(e: Throwable): ErrorDeAutenticacion = when (e) {
-            is ErrorDeAutenticacion -> e
-            is RestException -> if (e.statusCode in 400..499) ErrorDeAutenticacion.CredencialRechazada else ErrorDeAutenticacion.Desconocido
-            is HttpRequestException, is IOException -> ErrorDeAutenticacion.SinConexion
+        fun traducir(e: Throwable): ErrorDeAutenticacion = when {
+            e is ErrorDeAutenticacion -> e
+            e is RestException && (e.statusCode == 429 || (e as? AuthRestException)?.errorCode == AuthErrorCode.OverRequestRateLimit) ->
+                ErrorDeAutenticacion.DemasiadosIntentos
+            e is AuthRestException && e.errorCode == AuthErrorCode.EmailNotConfirmed -> ErrorDeAutenticacion.CorreoSinVerificar
+            e is RestException -> if (e.statusCode in 400..499) ErrorDeAutenticacion.CredencialRechazada else ErrorDeAutenticacion.Desconocido
+            e is HttpRequestException || e is IOException -> ErrorDeAutenticacion.SinConexion
             else -> ErrorDeAutenticacion.Desconocido
         }
     }

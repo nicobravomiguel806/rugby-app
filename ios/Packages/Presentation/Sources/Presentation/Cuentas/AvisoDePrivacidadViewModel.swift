@@ -1,14 +1,23 @@
 import Observation
 import Domain
 
+/// C-02 · La decisión que la persona tomó en el aviso, para repetirla con «Reintentar» (ADR 0011).
+public enum DecisionDelAviso: Equatable, Sendable {
+    case aceptar, rechazar
+}
+
 /// C-01 · Estado de la pantalla Aviso de privacidad (CA-2, CA-4, CA-9). Espejo en Android: presentation/.../cuentas/AvisoDePrivacidadViewModel.kt.
 public enum EstadoDelAviso: Equatable, Sendable {
     case pendiente
     case enviando
     case aceptado
     /// «No acepto»: la sesión se cerró y no se guardó nada; si había consentimiento previo, se registró su revocación
-    /// o, si no se pudo, la sesión se cerró igual (CA-9, H-6). La App vuelve a Bienvenida.
+    /// (CA-9, H-6). La App vuelve a Bienvenida.
     case rechazado
+    /// C-02 · ADR 0011: la decisión no se pudo registrar (sin red o error del servidor). Se queda en el aviso, con la
+    /// sesión intacta, y «Reintentar» repite la misma decisión.
+    case noRegistrado(DecisionDelAviso)
+    /// Errores en los que reintentar no sirve: `versionDesactualizada` y `sinSesion`.
     case error(ErrorDeConsentimiento)
     /// No se pudo borrar la sesión local al rechazar: se queda en la pantalla y se puede reintentar (CP-164c).
     case errorAlCerrarSesion
@@ -71,7 +80,7 @@ public final class AvisoDePrivacidadViewModel {
             try await aceptar.ejecutar(finalidades: finalidades)
             estado = .aceptado
         } catch {
-            estado = .error(error as? ErrorDeConsentimiento ?? .desconocido)
+            estado = Self.estadoTrasFallo(error, .aceptar)
         }
     }
 
@@ -82,13 +91,28 @@ public final class AvisoDePrivacidadViewModel {
             aceptoAvisoDePrivacidad = false
             finalidades = []
             estado = .rechazado
-        } catch is ErrorDeConsentimiento {
-            // CP-164g: la revocación no se registró, pero la sesión local ya se cerró. Se sale del aviso igual.
-            aceptoAvisoDePrivacidad = false
-            finalidades = []
-            estado = .rechazado
+        } catch let error as ErrorDeConsentimiento {
+            // C-02 · CP-164g (ADR 0011): la revocación no se registró y la sesión sigue abierta. Se queda en el aviso.
+            estado = Self.estadoTrasFallo(error, .rechazar)
         } catch {
             estado = .errorAlCerrarSesion
+        }
+    }
+
+    /// C-02 · «Reintentar»: repite la decisión que no se pudo registrar.
+    public func reintentar() async {
+        guard case let .noRegistrado(decision) = estado else { return }
+        switch decision {
+        case .aceptar: await aceptarYContinuar()
+        case .rechazar: await rechazar()
+        }
+    }
+
+    private static func estadoTrasFallo(_ error: Error, _ decision: DecisionDelAviso) -> EstadoDelAviso {
+        switch error as? ErrorDeConsentimiento {
+        case .versionDesactualizada?: return .error(.versionDesactualizada)
+        case .sinSesion?: return .error(.sinSesion)
+        default: return .noRegistrado(decision)
         }
     }
 }

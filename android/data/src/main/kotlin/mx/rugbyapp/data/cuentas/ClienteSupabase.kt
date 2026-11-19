@@ -18,7 +18,8 @@ import java.net.URI
  * Sin configuración no se crea el cliente: los repositorios responden `ConfiguracionIncompleta` y la app arranca igual.
  * C-01 · Un solo cliente por app (ADR 0006): Auth (sesión y `code_verifier` de PKCE en el mismo almacén cifrado) y
  * Postgrest (manda el access token de ese mismo Auth). Lo comparten los repositorios de sesión, registro y
- * consentimiento. Espejo en iOS: Data/Cuentas/ClienteSupabase.swift.
+ * consentimiento. C-02 · también recuperación.
+ * Espejo en iOS: Data/Cuentas/ClienteSupabase.swift.
  */
 data class ConfiguracionDeSupabase(val url: String, val anonKey: String) {
     /** URL base del proyecto (https), sin `/` final, o `null` si la configuración está incompleta. */
@@ -33,8 +34,15 @@ data class ConfiguracionDeSupabase(val url: String, val anonKey: String) {
     override fun toString() = "ConfiguracionDeSupabase(url=$url)" // la llave no se imprime
 }
 
+/** C-02 · Entradas de texto por clave en el almacén cifrado de la sesión (ADR 0007): la marca «recuperación en curso». */
+interface AlmacenPorClave {
+    suspend fun guardar(clave: String, valor: String)
+    suspend fun leer(clave: String): String?
+    suspend fun borrar(clave: String)
+}
+
 /** Almacén que, además de lo que pide supabase-kt, sabe borrar todo lo suyo (cierre de sesión, P-8). */
-interface AlmacenSeguroDeSesion : SessionManager, CodeVerifierCache {
+interface AlmacenSeguroDeSesion : SessionManager, CodeVerifierCache, AlmacenPorClave {
     suspend fun borrarTodo()
 }
 
@@ -53,11 +61,39 @@ class ClienteSupabase internal constructor(
     /** Ktor directo para lo que el SDK no expone igual que en iOS (logout local, resend con `redirect_to`). */
     internal val http: HttpClient by lazy { motor?.let { HttpClient(it) } ?: HttpClient(OkHttp) }
 
-    internal companion object {
+    companion object {
         /** Adonde vuelve el enlace de verificación del correo (ADR 0008). Debe estar en Redirect URLs de Supabase. */
-        const val URL_DE_REGRESO = "rugbyapp://auth-callback"
+        internal const val URL_DE_REGRESO = "rugbyapp://auth-callback"
+        /** C-02 · Adonde vuelve el enlace de recuperación de contraseña (ADR 0008). También en Redirect URLs, exacta. */
+        internal const val URL_DE_RECUPERACION = "rugbyapp://recuperar-contrasena"
 
-        fun crear(
+        /** C-02 · `rugbyapp://auth-callback` con path vacío (cierra C-01 H-1): `…/auth-callback/x?code=…` no es enlace. */
+        fun esEnlaceDeVerificacion(enlace: String): Boolean = coincide(enlace, URL_DE_REGRESO)
+
+        /** C-02 · `rugbyapp://recuperar-contrasena` con path vacío. Nunca se canjea como verificación, ni al revés (C02-7). */
+        fun esEnlaceDeRecuperacion(enlace: String): Boolean = coincide(enlace, URL_DE_RECUPERACION)
+
+        private fun coincide(enlace: String, esperado: String): Boolean {
+            val uri = runCatching { URI(enlace) }.getOrNull() ?: return false
+            val referencia = URI(esperado)
+            return uri.scheme.equals(referencia.scheme, ignoreCase = true) &&
+                uri.host.equals(referencia.host, ignoreCase = true) &&
+                uri.rawPath.isNullOrEmpty()
+        }
+
+        /** Parámetros de la query y del fragmento de un enlace, ya decodificados. */
+        internal fun parametrosDe(enlace: String): Map<String, String> {
+            val uri = runCatching { URI(enlace) }.getOrNull() ?: return emptyMap()
+            return listOfNotNull(uri.rawQuery, uri.rawFragment)
+                .flatMap { it.split("&") }
+                .filter { it.isNotEmpty() }
+                .associate { par ->
+                    val (clave, valor) = par.split("=", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+                    java.net.URLDecoder.decode(clave, "UTF-8") to java.net.URLDecoder.decode(valor, "UTF-8")
+                }
+        }
+
+        internal fun crear(
             configuracion: ConfiguracionDeSupabase,
             almacen: AlmacenSeguroDeSesion,
             motor: HttpClientEngine?,

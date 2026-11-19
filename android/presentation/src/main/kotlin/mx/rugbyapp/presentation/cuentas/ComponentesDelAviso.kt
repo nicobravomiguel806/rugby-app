@@ -20,7 +20,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import mx.rugbyapp.domain.cuentas.AvisoDePrivacidad
+import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
 import mx.rugbyapp.domain.cuentas.ErrorDeConsentimiento
+import mx.rugbyapp.domain.cuentas.ErrorDeRecuperacion
 import mx.rugbyapp.domain.cuentas.ErrorDeRegistro
 import mx.rugbyapp.domain.cuentas.FinalidadSecundaria
 
@@ -99,7 +101,7 @@ internal fun mensajeDe(error: ErrorDeRegistro): String = when (error) {
     ErrorDeRegistro.CorreoInvalido -> "Escribe un correo válido, como nombre@dominio.mx"
     ErrorDeRegistro.ContrasenaCorta -> "La contraseña debe tener al menos 10 caracteres"
     ErrorDeRegistro.AvisoNoAceptado -> "Para crear tu cuenta, acepta el Aviso de Privacidad"
-    ErrorDeRegistro.EnlaceInvalido -> "Abre el enlace en este teléfono o pide uno nuevo"
+    ErrorDeRegistro.EnlaceInvalido -> ENLACE_INVALIDO // C-02 · CA-8 (ADR 0008)
     ErrorDeRegistro.DemasiadosIntentos -> "Demasiados intentos. Espera unos minutos e inténtalo de nuevo"
     ErrorDeRegistro.SinConexion -> "Sin conexión. Inténtalo de nuevo"
     ErrorDeRegistro.Desconocido -> "Algo salió mal. Inténtalo de nuevo"
@@ -110,4 +112,28 @@ internal fun mensajeDe(error: ErrorDeConsentimiento): String = when (error) {
     ErrorDeConsentimiento.SinSesion -> "Tu sesión terminó. Vuelve a entrar"
     ErrorDeConsentimiento.SinConexion -> "Sin conexión. Inténtalo de nuevo"
     ErrorDeConsentimiento.Desconocido -> "Algo salió mal. Inténtalo de nuevo"
+}
+
+// C-02 · Textos exactos de domain-model.md §1 (P-5, P-7, P-9). Presentación, no reglas de negocio.
+internal const val ENLACE_INVALIDO = "Este enlace ya no es válido o expiró"
+internal const val REENVIO_NEUTRO = "Si el correo está registrado y sin confirmar, te enviamos un nuevo enlace. Revisa también tu carpeta de spam."
+internal const val RECUPERACION_NEUTRA = "Si hay una cuenta con ese correo, te enviamos un enlace para restablecer tu contraseña."
+internal const val CORREO_SIN_VERIFICAR = "Confirma tu correo para entrar. Te enviamos un enlace."
+
+/** Errores del inicio con correo (AT-11: un solo texto para correo o contraseña incorrectos). */
+internal fun mensajeDeInicio(error: ErrorDeAutenticacion): String = when (error) {
+    ErrorDeAutenticacion.CredencialRechazada -> "Correo o contraseña incorrectos."
+    ErrorDeAutenticacion.CorreoInvalido -> "Escribe un correo válido, como nombre@dominio.mx"
+    ErrorDeAutenticacion.CorreoSinVerificar -> CORREO_SIN_VERIFICAR
+    ErrorDeAutenticacion.DemasiadosIntentos -> "Demasiados intentos. Espera unos minutos e inténtalo de nuevo."
+    else -> mensajeDe(error)
+}
+
+internal fun mensajeDe(error: ErrorDeRecuperacion): String = when (error) {
+    ErrorDeRecuperacion.CorreoInvalido -> "Escribe un correo válido, como nombre@dominio.mx"
+    ErrorDeRecuperacion.ContrasenaCorta -> "La contraseña debe tener al menos 10 caracteres"
+    ErrorDeRecuperacion.EnlaceInvalido -> ENLACE_INVALIDO
+    ErrorDeRecuperacion.DemasiadosIntentos -> "Demasiados intentos. Espera unos minutos e inténtalo de nuevo."
+    ErrorDeRecuperacion.SinConexion -> "Sin conexión. Inténtalo de nuevo"
+    ErrorDeRecuperacion.Desconocido -> "Algo salió mal. Inténtalo de nuevo"
 }

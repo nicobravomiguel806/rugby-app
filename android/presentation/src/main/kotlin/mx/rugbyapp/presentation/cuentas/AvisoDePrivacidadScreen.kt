@@ -26,6 +26,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * correo si se perdió lo marcado. Sin «atrás»: la única salida sin aceptar es «No acepto» (CA-9) o cerrar la app (§3.6).
  * Espejo en iOS: Presentation/Cuentas/AvisoDePrivacidadView.swift.
  */
+/** C-02 · Texto aprobado por el PO (2026-11-12) cuando no se pudo registrar la decisión. */
+internal const val TEXTO_NO_REGISTRADO = "No pudimos registrar tu decisión. Revisa tu conexión"
+
 @Composable
 fun AvisoDePrivacidadScreen(viewModel: AvisoDePrivacidadViewModel, urlDelAviso: String?, modifier: Modifier = Modifier) {
     val acepto by viewModel.aceptoAvisoDePrivacidad.collectAsStateWithLifecycle()
@@ -44,6 +47,14 @@ fun AvisoDePrivacidadScreen(viewModel: AvisoDePrivacidadViewModel, urlDelAviso: 
         when (val actual = estado) {
             is EstadoDelAviso.Error -> Text(mensajeDe(actual.error), color = MaterialTheme.colorScheme.error)
             EstadoDelAviso.ErrorAlCerrarSesion -> Text("No se pudo cerrar la sesión. Inténtalo de nuevo", color = MaterialTheme.colorScheme.error)
+            is EstadoDelAviso.NoRegistrado -> {
+                // C-02 · ADR 0011: la decisión requiere conexión; se queda aquí y «Reintentar» la repite.
+                Text(TEXTO_NO_REGISTRADO, color = MaterialTheme.colorScheme.error)
+                OutlinedButton(
+                    onClick = viewModel::reintentar,
+                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).testTag("aviso.reintentar"),
+                ) { Text("Reintentar") }
+            }
             else -> Unit
         }
         val enviando = estado == EstadoDelAviso.Enviando

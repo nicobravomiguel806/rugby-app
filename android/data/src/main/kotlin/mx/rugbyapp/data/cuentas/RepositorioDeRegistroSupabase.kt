@@ -8,13 +8,16 @@ import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import java.io.IOException
-import java.net.URI
-import java.net.URLDecoder
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import mx.rugbyapp.domain.cuentas.DatosDeRegistro
 import mx.rugbyapp.domain.cuentas.ErrorDeRegistro
@@ -54,30 +57,33 @@ class RepositorioDeRegistroSupabase(private val cliente: ClienteSupabase) : Repo
 
     override suspend fun reenviarVerificacion(correo: String) {
         val base = cliente.configuracion.urlBase ?: throw ErrorDeRegistro.Desconocido
-        val estado = try {
-            cliente.http.post("$base/auth/v1/resend") {
+        val (estado, cuerpo) = try {
+            val respuesta = cliente.http.post("$base/auth/v1/resend") {
                 parameter("redirect_to", ClienteSupabase.URL_DE_REGRESO)
                 header("apikey", cliente.configuracion.anonKey.trim())
                 contentType(ContentType.Application.Json)
                 setBody(buildJsonObject { put("type", "signup"); put("email", correo) }.toString())
-            }.status.value
+            }
+            respuesta.status.value to runCatching { respuesta.bodyAsText() }.getOrDefault("")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             throw traducir(e)
         }
-        when {
-            estado == 429 -> throw ErrorDeRegistro.DemasiadosIntentos
-            estado !in 200..299 -> throw ErrorDeRegistro.Desconocido
-        }
+        // C-02 · H-2 y H-13 (CA-8, C02-8, AT-11): igual que `recover`. El servidor solo intenta enviar si la cuenta existe,
+        // así que cualquier respuesta suya (límite de correo, 5xx, `email_address_not_authorized`…) es neutra. Solo se
+        // distinguen la falta de red (arriba) y el límite por IP (`over_request_rate_limit`).
+        if (estado == 429 && codigoDeError(cuerpo) == "over_request_rate_limit") throw ErrorDeRegistro.DemasiadosIntentos
     }
 
     override suspend fun confirmarCorreo(enlace: String): Sesion {
-        val auth = cliente.supabase?.auth ?: throw ErrorDeRegistro.Desconocido
+        // H-18: el enlace y su error se revisan antes de exigir el cliente (sin configuración, un enlace vencido sigue
+        // siendo inválido).
         val parametros = parametrosDelEnlace(enlace) ?: throw ErrorDeRegistro.EnlaceInvalido
         // Supabase pone el error en el enlace si venció o ya se usó (p. ej. error_code=otp_expired).
         if (listOf("error", "error_code", "error_description").any { it in parametros }) throw ErrorDeRegistro.EnlaceInvalido
         val codigo = parametros["code"]?.takeIf { it.isNotBlank() } ?: throw ErrorDeRegistro.EnlaceInvalido
+        val auth = cliente.supabase?.auth ?: throw ErrorDeRegistro.Desconocido
         val sesion = try {
             auth.exchangeCodeForSession(codigo)
         } catch (e: CancellationException) {
@@ -93,24 +99,19 @@ class RepositorioDeRegistroSupabase(private val cliente: ClienteSupabase) : Repo
     }
 
     companion object {
-        /** Solo `rugbyapp://auth-callback…` (ADR 0008). Lo demás no se toca. */
-        fun esEnlaceDeVerificacion(enlace: String): Boolean {
-            val uri = runCatching { URI(enlace) }.getOrNull() ?: return false
-            val esperado = URI(ClienteSupabase.URL_DE_REGRESO)
-            return uri.scheme.equals(esperado.scheme, ignoreCase = true) && uri.host.equals(esperado.host, ignoreCase = true)
-        }
+        /** Solo `rugbyapp://auth-callback` con path vacío (ADR 0008, C-02). Lo demás no se toca. */
+        fun esEnlaceDeVerificacion(enlace: String): Boolean = ClienteSupabase.esEnlaceDeVerificacion(enlace)
 
         /** Parámetros de la query y del fragmento, o `null` si no es un enlace de verificación. */
-        internal fun parametrosDelEnlace(enlace: String): Map<String, String>? {
-            if (!esEnlaceDeVerificacion(enlace)) return null
-            val uri = URI(enlace)
-            return listOfNotNull(uri.rawQuery, uri.rawFragment)
-                .flatMap { it.split("&") }
-                .filter { it.isNotEmpty() }
-                .associate { par ->
-                    val (clave, valor) = par.split("=", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-                    URLDecoder.decode(clave, "UTF-8") to URLDecoder.decode(valor, "UTF-8")
-                }
+        internal fun parametrosDelEnlace(enlace: String): Map<String, String>? =
+            if (esEnlaceDeVerificacion(enlace)) ClienteSupabase.parametrosDe(enlace) else null
+
+        /** GoTrue manda `error_code` (formato sin versión de API) o `code` como texto (versión 2024-01-01). */
+        internal fun codigoDeError(cuerpo: String): String? {
+            val campos = runCatching { Json.parseToJsonElement(cuerpo).jsonObject }.getOrNull() ?: return null
+            return sequenceOf("error_code", "code")
+                .mapNotNull { runCatching { campos[it]?.jsonPrimitive?.takeIf { p -> p.isString }?.contentOrNull }.getOrNull() }
+                .firstOrNull()
         }
 
         internal fun traducir(e: Throwable): ErrorDeRegistro = when (e) {

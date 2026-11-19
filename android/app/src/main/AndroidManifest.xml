@@ -27,12 +27,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- C-01 · ADR 0008 / AT-19: rugbyapp://auth-callback?code=… con PKCE (App Links con dominio propio en SP-07). -->
+            <!-- C-01 · ADR 0008 / AT-19: rugbyapp://auth-callback?code=… con PKCE (App Links con dominio propio en SP-07).
+                 C-02 · rugbyapp://recuperar-contrasena?code=… (recuperación de contraseña, también con PKCE). La app
+                 exige además host exacto y path vacío antes de canjear (C02-7). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="rugbyapp" android:host="auth-callback" />
+                <data android:host="recuperar-contrasena" />
             </intent-filter>
         </activity>
     </application>

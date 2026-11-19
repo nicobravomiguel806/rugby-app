@@ -26,6 +26,7 @@ final class AccesoViewModelTests: XCTestCase {
             return sesion
         }
         func sesionActual() async -> Sesion? { guardada }
+        func iniciarSesion(correo: String, contrasena: String) async throws -> Sesion { throw ErrorDeAutenticacion.credencialRechazada }
         func borrarSesionLocal() async throws { guardada = nil }
         func revocarSesionEnServidor() async throws { throw ErrorDeAutenticacion.sinConexion }
     }
@@ -87,5 +88,32 @@ final class AccesoViewModelTests: XCTestCase {
         await vm.cerrarSesion()
 
         XCTAssertEqual(vm.estado, .sinSesion)
+    }
+
+    // C-02 · CP-013 (Figma paso 4): «Cerrar sesión» pide confirmación; «Cancelar» no cierra nada.
+    func test_CP013_cerrarSesionPideConfirmacionYCancelarNoCierra() async {
+        let sesion = Sesion(usuarioId: "u-1", correo: nil)
+        let repositorio = Repositorio(guardada: sesion)
+        let vm = viewModel(repositorio)
+        await vm.cargar()
+
+        vm.pedirCerrarSesion()
+        XCTAssertTrue(vm.confirmandoCierre)
+        vm.cancelarCierre()
+
+        XCTAssertFalse(vm.confirmandoCierre)
+        XCTAssertEqual(vm.estado, .conSesion(sesion))
+        XCTAssertEqual(repositorio.guardada, sesion)
+
+        vm.pedirCerrarSesion()
+        await vm.cerrarSesion()
+        XCTAssertFalse(vm.confirmandoCierre)
+        XCTAssertEqual(vm.estado, .sinSesion)
+        XCTAssertNil(repositorio.guardada)
+    }
+
+    func test_CP165_losTextosDeErrorNuevosNoMuestranDetallesTecnicos() {
+        XCTAssertEqual(AccesoView.mensaje(de: .demasiadosIntentos), "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.")
+        XCTAssertEqual(AccesoView.mensaje(de: .correoSinVerificar), "Confirma tu correo para entrar. Te enviamos un enlace.")
     }
 }

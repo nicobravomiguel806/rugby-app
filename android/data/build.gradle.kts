@@ -26,7 +26,8 @@ dependencies {
     api(libs.supabase.auth)
     implementation(libs.supabase.postgrest)
     implementation(libs.ktor.client.okhttp)
-    implementation(libs.datastore.preferences)
+    // C-02 · api: AlmacenDeSesionCifrado acepta un DataStore inyectable (CA-5 / H-20, prueba instrumentada CP-170 en :app).
+    api(libs.datastore.preferences)
     implementation(libs.tink.android)
 
     testImplementation(libs.junit)

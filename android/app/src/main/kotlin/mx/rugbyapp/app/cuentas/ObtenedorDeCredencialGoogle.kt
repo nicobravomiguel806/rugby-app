@@ -1,6 +1,7 @@
 package mx.rugbyapp.app.cuentas
 
 import android.app.Activity
+import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -30,6 +31,12 @@ class ObtenedorDeCredencialGoogle(private val serverClientId: String) : Obtenedo
     fun vincular(actividad: Activity) { this.actividad = WeakReference(actividad) }
 
     fun desvincular(actividad: Activity) { if (this.actividad?.get() === actividad) this.actividad = null }
+
+    /** C-02 · CA-3 (SP-04 H-3): al cerrar sesión, Credential Manager olvida la cuenta elegida. Local, sin red. */
+    suspend fun olvidarCredencial() {
+        val contexto = actividad?.get() ?: return
+        CredentialManager.create(contexto).clearCredentialState(ClearCredentialStateRequest())
+    }
 
     override suspend fun obtener(p: ProveedorDeIdentidad, nonceHasheado: String): CredencialNativa {
         // Apple no tiene adaptador hasta SP-07.

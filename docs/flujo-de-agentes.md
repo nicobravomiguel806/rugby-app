@@ -90,6 +90,7 @@ Rigió del 2026-11-11 al 2026-11-12, por decisión del PO:
    - La Puerta 2 (merge) se hace cuando vuelva GitHub, con CI real.
 5. **Máximo 4 historias apiladas.** Al llegar a 4, el orquestador avisa al PO y no empieza otra.
 6. **Al volver GitHub:** se abre un PR por historia, en orden. Después de cada squash merge, la siguiente rama se rebasa sobre `main` antes de abrir su PR.
+7. **Dependencias en la DoR.** Una dependencia cuenta como cumplida si la historia está «En revisión · pendiente GitHub» y quedaron limpias su seguridad, su revisión y `./scripts/verificar.sh --todo` locales: sin bloqueantes abiertos y en verde (PO 2026-11-11).
 
 ## Uso de GitHub (para evitar otra suspensión)
 Desde el 2026-11-12, por decisión del PO, después de la suspensión de la cuenta. Aplican al orquestador y a todos los agentes:

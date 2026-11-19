@@ -52,8 +52,17 @@ final class ConsentimientoFalso: RepositorioDeConsentimiento, @unchecked Sendabl
 final class SesionFalsa: RepositorioDeSesion, @unchecked Sendable {
     var guardada: Sesion?
     var errorAlBorrar: ErrorDeAutenticacion?
+    /// C-02 · Resultado del inicio con correo.
+    var resultadoConCorreo: Result<Sesion, ErrorDeAutenticacion> = .success(Sesion(usuarioId: "u-1", correo: "daniela@ejemplo.mx"))
     private(set) var borrados = 0
+    private(set) var correosRecibidos: [String] = []
     init(guardada: Sesion? = nil) { self.guardada = guardada }
+    func iniciarSesion(correo: String, contrasena: String) async throws -> Sesion {
+        correosRecibidos.append(correo)
+        let sesion = try resultadoConCorreo.get()
+        guardada = sesion
+        return sesion
+    }
     func iniciarSesion(con credencial: CredencialNativa, nonce: String) async throws -> Sesion {
         let sesion = Sesion(usuarioId: "g-1", correo: "g@gmail.com", nombre: "Gabriel")
         guardada = sesion
@@ -75,5 +84,40 @@ struct GoogleFalso: ObtenedorDeCredencial {
     func obtener(_ proveedor: ProveedorDeIdentidad, nonceHasheado: String) async throws -> CredencialNativa {
         if let error { throw error }
         return CredencialNativa(proveedor: proveedor, idToken: "id", accessToken: nil)
+    }
+}
+
+// C-02 · Fake de la recuperación.
+
+final class RecuperacionFalsa: RepositorioDeRecuperacion, @unchecked Sendable {
+    var errorAlEnviar: ErrorDeRecuperacion?
+    var errorAlConfirmar: ErrorDeRecuperacion?
+    var errorAlCambiar: ErrorDeRecuperacion?
+    var enCurso = false
+    private(set) var enviados: [String] = []
+    private(set) var cambios: [String] = []
+    private(set) var enlaces: [String] = []
+    let sesion = Sesion(usuarioId: "u-1", correo: "daniela@ejemplo.mx")
+    func enviarEnlace(correo: String) async throws { enviados.append(correo); if let errorAlEnviar { throw errorAlEnviar } }
+    func confirmarEnlace(enlace: String) async throws -> Sesion {
+        enlaces.append(enlace)
+        if let errorAlConfirmar { throw errorAlConfirmar }
+        enCurso = true
+        return sesion
+    }
+    func cambiarContrasena(nueva: String) async throws { cambios.append(nueva); if let errorAlCambiar { throw errorAlCambiar } }
+    func cerrarOtrasSesiones() async throws {}
+    func recuperacionEnCurso() async -> Bool { enCurso }
+    func terminarRecuperacion() async throws { enCurso = false }
+}
+
+/// Casos de uso armados como en App (la revocación en el servidor de `SesionFalsa` es sin red).
+enum Armar {
+    static func cerrarSesion(_ sesiones: RepositorioDeSesion) -> CerrarSesionUseCase {
+        CerrarSesionUseCase(repositorio: sesiones)
+    }
+    static func google(_ sesiones: RepositorioDeSesion, error: ErrorDeAutenticacion? = nil) -> IniciarSesionUseCase {
+        IniciarSesionUseCase(generadorDeNonce: GeneradorFijo(), hashDeNonce: HashFijo(), obtenedor: GoogleFalso(error: error),
+                             repositorio: sesiones)
     }
 }

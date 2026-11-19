@@ -30,6 +30,9 @@ class AccesoViewModel(
 ) : ViewModel() {
     private val _estado = MutableStateFlow<EstadoDeAcceso>(EstadoDeAcceso.Cargando)
     val estado: StateFlow<EstadoDeAcceso> = _estado.asStateFlow()
+    /** C-02 · La hoja «¿Cerrar sesión?» está abierta (Figma paso 4). */
+    private val _confirmandoCierre = MutableStateFlow(false)
+    val confirmandoCierre: StateFlow<Boolean> = _confirmandoCierre.asStateFlow()
 
     fun cargar() = lanzar {
         _estado.value = obtenerSesionActual.ejecutar()?.let(EstadoDeAcceso::ConSesion) ?: EstadoDeAcceso.SinSesion
@@ -43,7 +46,13 @@ class AccesoViewModel(
         }
     }
 
+    /** C-02 · Abre la confirmación; cerrar sesión solo ocurre al confirmar. */
+    fun pedirCerrarSesion() { _confirmandoCierre.value = true }
+
+    fun cancelarCierre() { _confirmandoCierre.value = false }
+
     fun cerrarSesion() = lanzar {
+        _confirmandoCierre.value = false
         cerrarSesionUseCase.ejecutar()
         _estado.value = EstadoDeAcceso.SinSesion
     }

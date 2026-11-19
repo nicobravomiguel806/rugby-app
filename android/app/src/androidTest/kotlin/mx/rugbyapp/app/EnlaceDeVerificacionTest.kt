@@ -29,6 +29,18 @@ class EnlaceDeVerificacionTest {
         assertEquals(MainActivity::class.java.name, actividades.single().activityInfo.name)
     }
 
+    /** C-02 · ADR 0008: el enlace de recuperación `rugbyapp://recuperar-contrasena?code=…` también abre MainActivity. */
+    @Test fun c02_elEnlaceDeRecuperacionResuelveAMainActivity() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("rugbyapp://recuperar-contrasena?code=prueba"))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+            .setPackage(contexto.packageName)
+
+        val actividades = contexto.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+
+        assertEquals(1, actividades.size)
+        assertEquals(MainActivity::class.java.name, actividades.single().activityInfo.name)
+    }
+
     @Test fun adr0008_mainActivityEsSingleTop() {
         val info = contexto.packageManager.getActivityInfo(
             android.content.ComponentName(contexto, MainActivity::class.java), PackageManager.GET_META_DATA,

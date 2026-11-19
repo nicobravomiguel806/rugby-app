@@ -14,6 +14,8 @@ public enum EstadoDeAcceso: Equatable, Sendable {
 @Observable
 public final class AccesoViewModel {
     public private(set) var estado: EstadoDeAcceso = .cargando
+    /// C-02 · La hoja «¿Cerrar sesión?» está abierta (Figma paso 4).
+    public private(set) var confirmandoCierre = false
 
     private let iniciarSesion: IniciarSesionUseCase
     private let obtenerSesionActual: ObtenerSesionActualUseCase
@@ -45,7 +47,17 @@ public final class AccesoViewModel {
         }
     }
 
+    /// C-02 · Abre la confirmación; cerrar sesión solo ocurre al confirmar.
+    public func pedirCerrarSesion() {
+        confirmandoCierre = true
+    }
+
+    public func cancelarCierre() {
+        confirmandoCierre = false
+    }
+
     public func cerrarSesion() async {
+        confirmandoCierre = false
         estado = .cargando
         do {
             try await cerrarSesionUseCase.ejecutar()

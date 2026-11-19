@@ -118,6 +118,20 @@ final class RegistrarUsuarioUseCaseTests: XCTestCase {
         XCTAssertEqual(repositorio.reenvios, ["daniela@ejemplo.mx"])
     }
 
+    // C-02 · CA-8: en Enlace inválido la persona escribe el correo; uno inválido no llega al servidor.
+    func test_CP169_reenviarConUnCorreoInvalidoDaCorreoInvalidoSinLlamarAlRepositorio() async throws {
+        let repositorio = RepositorioDeRegistroFalso()
+        do {
+            try await ReenviarVerificacionUseCase(repositorio: repositorio).ejecutar(correo: "daniela@")
+            XCTFail("Se esperaba correoInvalido")
+        } catch {
+            XCTAssertEqual(error as? ErrorDeRegistro, .correoInvalido)
+        }
+        XCTAssertEqual(repositorio.reenvios, [])
+        try await ReenviarVerificacionUseCase(repositorio: repositorio).ejecutar(correo: "  Daniela@Ejemplo.MX ")
+        XCTAssertEqual(repositorio.reenvios, ["daniela@ejemplo.mx"])
+    }
+
     func test_CP160j_laDescripcionDeLosDatosNoContieneLaContrasena() {
         let d = datos(contrasena: "secreta-1234567")
         XCTAssertFalse(String(describing: d).contains("secreta-1234567"))

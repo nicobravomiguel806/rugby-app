@@ -147,4 +147,47 @@ final class RepositorioDeSesionSupabaseTests: XCTestCase {
 
         await esperarError(.sinConexion) { try await repo.revocarSesionEnServidor() }
     }
+
+    // MARK: - C-02 · CP-165: inicio con correo y contraseña
+
+    func test_CP165_inicioConCorreoMandaGrantTypePasswordConElCorreoYLaContrasena() async throws {
+        let servidor = ServidorFalso()
+        servidor.responder = { _ in (200, Self.sesionJSON) }
+        let almacen = AlmacenEnMemoria()
+        let repo = repositorio(servidor, almacen: almacen)
+
+        let sesion = try await repo.iniciarSesion(correo: "jugador@rugby.mx", contrasena: " Clave Larga 1 ")
+
+        let pedido = try XCTUnwrap(servidor.pedidos.first)
+        XCTAssertEqual(pedido.httpMethod, "POST")
+        XCTAssertEqual(pedido.url?.path, "/auth/v1/token")
+        XCTAssertEqual(pedido.url?.query, "grant_type=password")
+        let cuerpo = RespuestasDePrueba.cuerpo(pedido)
+        XCTAssertEqual(cuerpo["email"] as? String, "jugador@rugby.mx")
+        XCTAssertEqual(cuerpo["password"] as? String, " Clave Larga 1 ")
+        XCTAssertEqual(sesion, Sesion(usuarioId: "8f2c0a4e-1b2d-4c3e-9f00-123456789abc", correo: "jugador@rugby.mx"))
+        XCTAssertFalse(almacen.claves.isEmpty, "la sesión se guarda en el almacén seguro")
+    }
+
+    func test_CP165_traduceLasRespuestasDelServidor() async {
+        let casos: [(Int, String, ErrorDeAutenticacion)] = [
+            (400, #"{"error_code":"invalid_credentials","msg":"Invalid login credentials"}"#, .credencialRechazada),
+            (400, #"{"error_code":"email_not_confirmed","msg":"Email not confirmed"}"#, .correoSinVerificar),
+            (429, #"{"error_code":"over_request_rate_limit","msg":"Too many"}"#, .demasiadosIntentos)
+        ]
+        for (estado, cuerpo, esperado) in casos {
+            let servidor = ServidorFalso()
+            servidor.responder = { _ in (estado, Data(cuerpo.utf8)) }
+            let repo = repositorio(servidor)
+            await esperarError(esperado) { _ = try await repo.iniciarSesion(correo: "jugador@rugby.mx", contrasena: "x") }
+        }
+    }
+
+    func test_CP165_inicioConCorreoSinRedDaSinConexion() async {
+        let servidor = ServidorFalso()
+        servidor.responder = { _ in throw URLError(.notConnectedToInternet) }
+        let repo = repositorio(servidor)
+
+        await esperarError(.sinConexion) { _ = try await repo.iniciarSesion(correo: "jugador@rugby.mx", contrasena: "x") }
+    }
 }

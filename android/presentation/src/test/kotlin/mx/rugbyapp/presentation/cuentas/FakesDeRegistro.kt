@@ -1,16 +1,20 @@
 package mx.rugbyapp.presentation.cuentas
 
+import mx.rugbyapp.domain.cuentas.CerrarSesionUseCase
 import mx.rugbyapp.domain.cuentas.CredencialNativa
 import mx.rugbyapp.domain.cuentas.DatosDeRegistro
 import mx.rugbyapp.domain.cuentas.ErrorDeAutenticacion
 import mx.rugbyapp.domain.cuentas.ErrorDeConsentimiento
+import mx.rugbyapp.domain.cuentas.ErrorDeRecuperacion
 import mx.rugbyapp.domain.cuentas.ErrorDeRegistro
 import mx.rugbyapp.domain.cuentas.FinalidadSecundaria
 import mx.rugbyapp.domain.cuentas.GeneradorDeNonce
 import mx.rugbyapp.domain.cuentas.HashDeNonce
+import mx.rugbyapp.domain.cuentas.IniciarSesionUseCase
 import mx.rugbyapp.domain.cuentas.ObtenedorDeCredencial
 import mx.rugbyapp.domain.cuentas.ProveedorDeIdentidad
 import mx.rugbyapp.domain.cuentas.RepositorioDeConsentimiento
+import mx.rugbyapp.domain.cuentas.RepositorioDeRecuperacion
 import mx.rugbyapp.domain.cuentas.RepositorioDeRegistro
 import mx.rugbyapp.domain.cuentas.RepositorioDeSesion
 import mx.rugbyapp.domain.cuentas.ResultadoDeRegistro
@@ -53,11 +57,44 @@ class ConsentimientoFalso : RepositorioDeConsentimiento {
 
 class SesionFalsa(var guardada: Sesion? = null) : RepositorioDeSesion {
     var errorAlBorrar: ErrorDeAutenticacion? = null
+    /** C-02 · Resultado del inicio con correo. */
+    var resultadoConCorreo: Result<Sesion> = Result.success(Sesion("u-1", "daniela@ejemplo.mx"))
     var borrados = 0
+    val correosRecibidos = mutableListOf<String>()
     override suspend fun iniciarSesion(c: CredencialNativa, nonce: String) = Sesion("g-1", "g@gmail.com", nombre = "Gabriel").also { guardada = it }
+    override suspend fun iniciarSesion(correo: String, contrasena: String): Sesion {
+        correosRecibidos += correo
+        return resultadoConCorreo.getOrThrow().also { guardada = it }
+    }
     override suspend fun sesionActual() = guardada
     override suspend fun borrarSesionLocal() { borrados++; errorAlBorrar?.let { throw it }; guardada = null }
     override suspend fun revocarSesionEnServidor() { throw ErrorDeAutenticacion.SinConexion }
+}
+
+// C-02 · Fake de la recuperación.
+
+class RecuperacionFalsa : RepositorioDeRecuperacion {
+    var errorAlEnviar: ErrorDeRecuperacion? = null
+    var errorAlConfirmar: ErrorDeRecuperacion? = null
+    var errorAlCambiar: ErrorDeRecuperacion? = null
+    var enCurso = false
+    val enviados = mutableListOf<String>()
+    val cambios = mutableListOf<String>()
+    val enlaces = mutableListOf<String>()
+    val sesion = Sesion("u-1", "daniela@ejemplo.mx")
+    override suspend fun enviarEnlace(correo: String) { enviados += correo; errorAlEnviar?.let { throw it } }
+    override suspend fun confirmarEnlace(enlace: String): Sesion { enlaces += enlace; errorAlConfirmar?.let { throw it }; enCurso = true; return sesion }
+    override suspend fun cambiarContrasena(nueva: String) { cambios += nueva; errorAlCambiar?.let { throw it } }
+    override suspend fun cerrarOtrasSesiones() = Unit
+    override suspend fun recuperacionEnCurso() = enCurso
+    override suspend fun terminarRecuperacion() { enCurso = false }
+}
+
+/** Casos de uso armados como en App (la revocación en el servidor de `SesionFalsa` es sin red). */
+object Armar {
+    fun cerrarSesion(sesiones: RepositorioDeSesion) = CerrarSesionUseCase(sesiones)
+    fun google(sesiones: RepositorioDeSesion, error: ErrorDeAutenticacion? = null) =
+        IniciarSesionUseCase(GeneradorFijo, HashFijo, GoogleFalso(error), sesiones)
 }
 
 object GeneradorFijo : GeneradorDeNonce { override fun generar() = "crudo" }
